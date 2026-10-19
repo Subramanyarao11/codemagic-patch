@@ -8,6 +8,7 @@ BACKUP_ROOT="${SELFHOST_BACKUP_ROOT:-${SELFHOST_REPO_ROOT}/backups}"
 BACKUP_ROOT_GIVEN=0
 BACKUP_DIRECTORY=""
 SERVER_WAS_RUNNING=0
+SERVER_CONTAINER_ID=""
 BACKUP_COMPLETE=0
 CLEANUP_DONE=0
 backup_dir_abs=""
@@ -91,21 +92,38 @@ backup_cleanup() {
 
   if [ "$SERVER_WAS_RUNNING" -eq 1 ]; then
     log_selfhost "restarting server after backup"
-    # `--no-deps`: only the server was stopped, so only the server is brought
-    # back. Without it, `up` also recreates any depends_on service whose
-    # config changed in the checkout (e.g. a newly pinned postgres/minio image
-    # after a `git pull`) — switching storage or the database to a new image
-    # here, before upgrade.sh has confirmed its pre-upgrade backup and outside
-    # its rollback path.
-    if ! compose_selfhost up -d --no-deps server; then
+    # Start the exact container that was stopped. `compose up` would re-resolve
+    # the server from the env file and compose files as they are now, and
+    # `cmpatch selfhost upgrade` fast-forwards the checkout before upgrade.sh
+    # runs this as its pre-upgrade backup — so `up` would bring back a
+    # different server (new image or config) before the backup is confirmed
+    # and outside upgrade.sh's rollback path. upgrade.sh recreates the server
+    # itself once the backup succeeds.
+    local restart_ok=0 wait_container_id=""
+    if docker container inspect "$SERVER_CONTAINER_ID" >/dev/null 2>&1; then
+      if docker start "$SERVER_CONTAINER_ID" >/dev/null; then
+        restart_ok=1
+        wait_container_id="$SERVER_CONTAINER_ID"
+      fi
+    else
+      # The stopped container was removed mid-backup (e.g. a `compose down`);
+      # there is nothing to start, so fall back to creating one. `--no-deps`:
+      # only the server was stopped, so only the server is brought back —
+      # never recreate a depends_on service whose pinned image changed.
+      warn_selfhost "server container ${SERVER_CONTAINER_ID} no longer exists; recreating the server from the current configuration"
+      if compose_selfhost up -d --no-deps server; then
+        restart_ok=1
+      fi
+    fi
+    if [ "$restart_ok" -ne 1 ]; then
       exit_code=1
     else
-      # `up -d` only proves the container was created: a server that
-      # crash-loops right after (an env file drifted into a non-bootable
-      # state) would otherwise be reported as a completed backup over a downed
-      # deployment. Gate the restart on the same health check restore.sh uses,
-      # so a failed restart surfaces as a failed backup with the state named.
-      wait_for_selfhost_service server
+      # Starting only proves the container was started: a server that
+      # crash-loops right after would otherwise be reported as a completed
+      # backup over a downed deployment. Gate the restart on the same health
+      # check restore.sh uses, so a failed restart surfaces as a failed backup
+      # with the state named.
+      wait_for_selfhost_service server "$SELFHOST_DEFAULT_TIMEOUT_SECONDS" "$wait_container_id"
       if [ -n "${SERVER_URL:-}" ]; then
         wait_for_selfhost_http "${SERVER_URL%/}/health" "API health" 120
       fi
@@ -130,6 +148,7 @@ quiesce_server_for_backup() {
   running_server="$(compose_selfhost ps --status running -q server 2>/dev/null || true)"
   if [ -n "$running_server" ]; then
     SERVER_WAS_RUNNING=1
+    SERVER_CONTAINER_ID="$running_server"
   fi
 
   log_selfhost "stopping the server to quiesce writes during backup"

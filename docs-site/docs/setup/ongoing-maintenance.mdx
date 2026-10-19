@@ -61,6 +61,7 @@ Pass `--i-have-a-backup` only if you already took an external backup for this up
 ## Health and monitoring
 
 Open **Status** in the [dashboard](/docs/using-patch/dashboard) sidebar to confirm this install is fully running and up to date. It shows database, storage, and disk health, and whether a newer Patch server release is available.
+From a terminal, `cmpatch server status` prints the same checks; add `--format json` to script them.
 
 Set up a free uptime check against the ready endpoint (it checks the server process and its Postgres connection; storage is not covered). Without one, you may only notice downtime when OTA or the dashboard fails:
 
@@ -72,12 +73,16 @@ Also alert on host disk filling up. Monitor storage health separately (`https://
 
 Use Compose status and logs when something is already wrong, not as the primary check:
 
+A hand-run `docker compose` command needs the Compose files that match your install. The commands below are for the default install (bundled database and storage); for other setups, see the file list in [Status and logs](/docs/reference/operations#status-and-logs).
+
 ```bash
 docker compose --project-name codemagic-patch-selfhost --env-file .env.selfhost \
-  -f docker-compose.selfhost.yml ps
+  -f docker-compose.selfhost.yml -f deploy/selfhost/compose.bundled-db.yml \
+  -f deploy/selfhost/compose.bundled-storage.yml ps
 
 docker compose --project-name codemagic-patch-selfhost --env-file .env.selfhost \
-  -f docker-compose.selfhost.yml logs -f server
+  -f docker-compose.selfhost.yml -f deploy/selfhost/compose.bundled-db.yml \
+  -f deploy/selfhost/compose.bundled-storage.yml logs -f server
 ```
 
 If you use [Cloudflare](/docs/setup/cloudflare) or [CloudFront](/docs/setup/cloudfront) and clients report stale updates, look in server logs for `delivery cache purge completed with failures`. On Cloudflare, also check that the old two-hour Edge TTL Cache Rule from the previous setup guide has been deleted — it overrides the origin `s-maxage` and stretches the stale window; see [Cloudflare setup](/docs/setup/cloudflare#add-cache-rules).

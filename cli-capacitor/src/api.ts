@@ -107,6 +107,22 @@ export function assertHttpUrl(value: string, label = "Server URL"): string {
   return trimmed;
 }
 
+/**
+ * Prefixes of the server's own secrets: personal access tokens (server/src/app/apiToken.ts)
+ * and OAuth access and refresh tokens (server/src/app/oauthToken.ts). A value with one is
+ * a credential, never a deployment key, and must never be sent to a public URL or printed.
+ */
+export const SERVER_CREDENTIAL_PREFIXES = ["cm_pat_", "cm_oat_", "cm_ort_"] as const;
+
+/** Whether `value` is a token the server issued (see SERVER_CREDENTIAL_PREFIXES). */
+export function isServerCredential(value: string): boolean {
+  const trimmed = value.trim();
+  return SERVER_CREDENTIAL_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+/** Every server-issued token in a text, for redaction. */
+export const SERVER_CREDENTIAL_PATTERN = /cm_(?:pat|oat|ort)_[A-Za-z0-9_-]+/g;
+
 // Matches a non-ASCII or non-printable character, which cannot be placed in an
 // HTTP header value. A stray one usually means the token was copied incorrectly
 // (e.g. a homoglyph picked up from a chat or PDF), which otherwise surfaces as a

@@ -1,11 +1,13 @@
 /**
- * Top-level llms.txt sections. Keep in sync with docs-site/sidebars.ts.
+ * Top-level llms.txt sections, by doc id. Keep in sync with docs-site/sidebars.ts.
  *
  * Nested sidebar categories are flattened into their parent section.
  * Troubleshooting and FAQ are grouped under Optional per the
  * llmstxt.org "Optional" section convention.
  */
-export const LLMS_SECTIONS = [
+export type LlmsSection = {label: string; docIds: string[]};
+
+export const LLMS_SECTIONS: LlmsSection[] = [
   {
     label: 'Overview',
     docIds: ['intro'],
@@ -83,4 +85,19 @@ export const LLMS_SECTIONS = [
       'releases/server',
     ],
   },
+];
+
+/** The "Where to start" list at the top of llms.txt, by doc id. */
+export const LLMS_START_HERE: {label: string; docId: string}[] = [
+  {label: 'Try Patch locally', docId: 'intro'},
+  {label: 'How it works', docId: 'introduction/how-it-works'},
+  {label: 'Install for production', docId: 'setup/install'},
+  {label: 'Migrate from CodePush', docId: 'migration/migrating-from-codepush'},
+  {
+    label: 'Migrate from Expo Updates',
+    docId: 'migration/migrating-from-expo-updates',
+  },
+  {label: 'CLI reference', docId: 'reference/cli-reference'},
+  {label: 'SDK reference', docId: 'reference/sdk-reference'},
+  {label: 'Debugging OTA issues', docId: 'troubleshooting'},
 ];

@@ -94,6 +94,10 @@ adb reverse tcp:9100 tcp:9100
 
 Repeat the forwarding after restarting the device or adb server. The guided demo handles it automatically. The evaluation stack binds only to your laptop's loopback interface, so replacing localhost with a LAN IP does not make it reachable from an iPhone or another machine. For those devices, use a reachable server from the [Install guide](/docs/install).
 
+:::warning
+Android release builds block plain HTTP by default, and OTA updates apply only to release builds. For local evaluation only, add `android:usesCleartextTraffic="true"` to the `<application>` element in `android/app/src/main/AndroidManifest.xml`. Remove it before building for the store.
+:::
+
 <div>
 
 - [Native setup](/docs/setup/native-setup) for bare React Native or the Expo config plugin

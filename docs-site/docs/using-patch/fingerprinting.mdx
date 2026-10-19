@@ -22,7 +22,11 @@ It is a compatibility signal. Matching fingerprints should mean compatible nativ
 
 ### Disagreements
 
-If a new release's fingerprint disagrees with the value already stored for that binary version, the current CLI and dashboard block the publication. If you want to, you can manually override this block, but it's designed to stop accidental incompatibilities.
+If a new release's fingerprint disagrees with the value already stored for that binary version, the current CLI and dashboard block the publication. The block is designed to stop accidental incompatibilities, and you can override it once you have checked that the release targets the intended native binary:
+
+- In a terminal, `cmpatch release-react` and `cmpatch release create` show the stored and release fingerprints and ask you to confirm before they retry.
+- In CI, or with `--yes`, there is no prompt: the command fails with a hint. Pass `--allow-fingerprint-mismatch` to publish anyway.
+
 
 ### Expansion
 

@@ -228,7 +228,8 @@ export type AppRenameCommand = {
 export type AppSettingCommand = {
   app: AppSelector;
   kind: "app-setting";
-  requireCodeSigning: boolean;
+  /** Absent: show the current settings. Present: update them. */
+  requireCodeSigning?: boolean;
   serverUrl: string;
   token?: string;
 };
@@ -242,9 +243,39 @@ export type AppRemoveCommand = {
   yes?: true;
 };
 
+export type AppTransferCommand = {
+  app: AppSelector;
+  /** Empty when neither --dest-team nor --dest-team-id was given. */
+  destTeam: TeamSelector;
+  kind: "app-transfer";
+  nonInteractive?: true;
+  serverUrl: string;
+  token?: string;
+  yes?: true;
+};
+
 export type WhoamiCommand = {
   kind: "whoami";
   serverUrl: string;
+  token?: string;
+};
+
+export type ServerStatusCommand = {
+  kind: "server-status";
+  serverUrl: string;
+  token?: string;
+};
+
+export type TeamListCommand = {
+  kind: "team-list";
+  serverUrl: string;
+  token?: string;
+};
+
+export type TeamShowCommand = {
+  kind: "team-show";
+  serverUrl: string;
+  team: TeamSelector;
   token?: string;
 };
 
@@ -262,11 +293,24 @@ export type TokenListCommand = {
   token?: string;
 };
 
+/** Exactly one of a token's id or its display name (`token create --name`). */
+export type ApiTokenSelector =
+  | {
+      name: string;
+      tokenId?: never;
+    }
+  | {
+      name?: never;
+      tokenId: string;
+    };
+
 export type TokenRevokeCommand = {
+  apiToken: ApiTokenSelector;
   kind: "token-revoke";
+  nonInteractive?: true;
   serverUrl: string;
   token?: string;
-  tokenId: string;
+  yes?: true;
 };
 
 export type LoginCommand = {
@@ -356,8 +400,10 @@ export type MemberInviteListCommand = {
 export type MemberInviteRevokeCommand = {
   invitationId: string;
   kind: "member-invite-revoke";
+  nonInteractive?: true;
   serverUrl: string;
   token?: string;
+  yes?: true;
 };
 
 export type MemberRemoveCommand =
@@ -365,19 +411,23 @@ export type MemberRemoveCommand =
       bindingId: string;
       kind: "member-remove";
       roleKey?: never;
+      nonInteractive?: true;
       serverUrl: string;
       team?: never;
       token?: string;
       user?: never;
+      yes?: true;
     }
   | {
       bindingId?: never;
       kind: "member-remove";
       roleKey: string;
+      nonInteractive?: true;
       serverUrl: string;
       team: TeamSelector;
       token?: string;
       user: MemberUserSelector;
+      yes?: true;
     };
 
 // `roleKey` is the role the member is moved to. In the user form, `fromRoleKey`
@@ -388,20 +438,24 @@ export type MemberUpdateCommand =
       fromRoleKey?: never;
       kind: "member-update";
       roleKey: string;
+      nonInteractive?: true;
       serverUrl: string;
       team?: never;
       token?: string;
       user?: never;
+      yes?: true;
     }
   | {
       bindingId?: never;
       fromRoleKey?: string;
       kind: "member-update";
       roleKey: string;
+      nonInteractive?: true;
       serverUrl: string;
       team: TeamSelector;
       token?: string;
       user: MemberUserSelector;
+      yes?: true;
     };
 
 export type ReleaseShowCommand = {
@@ -414,7 +468,6 @@ export type ReleaseShowCommand = {
 export type ReleaseInspectCommand = {
   format?: OutputFormat;
   kind: "release-inspect";
-  logs: boolean;
   release: ReleaseSelector;
   serverUrl: string;
   timeoutSeconds: number;
@@ -422,7 +475,16 @@ export type ReleaseInspectCommand = {
   wait: boolean;
 };
 
-export type ReleaseListCommand = {
+/**
+ * `--binary-version` / `--binary-version-prefix`, sent as the server's
+ * `binary_version` / `binary_version_prefix` query pair. At most one is set.
+ */
+export type BinaryVersionFilterFlags = {
+  binaryVersion?: string;
+  binaryVersionPrefix?: string;
+};
+
+export type ReleaseListCommand = BinaryVersionFilterFlags & {
   deployment: DeploymentSelector;
   format?: OutputFormat;
   includeMetrics?: boolean;
@@ -443,9 +505,88 @@ export type DeploymentMetricsCommand = {
   token?: string;
 };
 
+/** `--range` presets of `deployment timeseries`, the dashboard's chart presets. */
+export type TimeseriesRange = "7d" | "30d" | "90d" | "1y";
+
+/**
+ * `--range` and `--from`/`--to` are mutually exclusive; with neither, the
+ * server's default range applies. `range` is turned into `from`/`to` when the
+ * command runs, against the clock in `CommandDeps`.
+ */
+export type DeploymentTimeseriesCommand = BinaryVersionFilterFlags & {
+  deployment: DeploymentSelector;
+  format?: OutputFormat;
+  from?: string;
+  kind: "deployment-timeseries";
+  range?: TimeseriesRange;
+  seriesLimit?: number;
+  serverUrl: string;
+  to?: string;
+  token?: string;
+};
+
 export type ReleaseMetricsCommand = {
   format?: OutputFormat;
   kind: "release-metrics";
+  release: ReleaseSelector;
+  serverUrl: string;
+  token?: string;
+};
+
+/**
+ * One `payload.code` bucket under a failure reason: a literal code
+ * (`--code`), or the bucket of failures whose payload carried no code
+ * (`--no-code`). The no-code bucket is a bucket like any other, never "every
+ * code"; it travels as an omitted `code` query parameter.
+ */
+export type FailureCodeBucket =
+  | { code: string; kind: "code" }
+  | { kind: "no-code" };
+
+/**
+ * `--reason` plus an optional code bucket. Without a bucket the `failures`
+ * verbs read the reason's codes; with one, that bucket's distribution.
+ */
+export type FailureBucketFlags = {
+  codeBucket?: FailureCodeBucket;
+  reason: string;
+};
+
+/** The `failure-events` verbs: the bucket is required, the page is optional. */
+export type FailureEventsFlags = {
+  codeBucket: FailureCodeBucket;
+  cursor?: string;
+  limit?: number;
+  reason: string;
+};
+
+export type DeploymentFailuresCommand = FailureBucketFlags & {
+  deployment: DeploymentSelector;
+  format?: OutputFormat;
+  kind: "deployment-failures";
+  serverUrl: string;
+  token?: string;
+};
+
+export type DeploymentFailureEventsCommand = FailureEventsFlags & {
+  deployment: DeploymentSelector;
+  format?: OutputFormat;
+  kind: "deployment-failure-events";
+  serverUrl: string;
+  token?: string;
+};
+
+export type ReleaseFailuresCommand = FailureBucketFlags & {
+  format?: OutputFormat;
+  kind: "release-failures";
+  release: ReleaseSelector;
+  serverUrl: string;
+  token?: string;
+};
+
+export type ReleaseFailureEventsCommand = FailureEventsFlags & {
+  format?: OutputFormat;
+  kind: "release-failure-events";
   release: ReleaseSelector;
   serverUrl: string;
   token?: string;
@@ -646,6 +787,7 @@ export type CliCommand =
   | AppSettingCommand
   | AppShowCommand
   | AppRemoveCommand
+  | AppTransferCommand
   | BundleCommand
   | ConfigCommand
   | ContextCommand
@@ -653,6 +795,9 @@ export type CliCommand =
   | DeploymentCreateCommand
   | DeploymentListCommand
   | DeploymentMetricsCommand
+  | DeploymentTimeseriesCommand
+  | DeploymentFailuresCommand
+  | DeploymentFailureEventsCommand
   | DeploymentRenameCommand
   | DeploymentRemoveCommand
   | DebugCommand
@@ -673,6 +818,8 @@ export type CliCommand =
   | ReleaseReactCommand
   | ReleaseListCommand
   | ReleaseMetricsCommand
+  | ReleaseFailuresCommand
+  | ReleaseFailureEventsCommand
   | ReleasePatchCommand
   | ReleasePromoteCommand
   | ReleaseRollbackCommand
@@ -681,6 +828,9 @@ export type CliCommand =
   | TokenListCommand
   | TokenRevokeCommand
   | SelfhostCommand
+  | ServerStatusCommand
+  | TeamListCommand
+  | TeamShowCommand
   | WireCommand
   | LoginCommand
   | LogoutCommand
@@ -709,7 +859,6 @@ export type PromptableFlag =
   | "name"
   | "newName"
   | "platform"
-  | "requireCodeSigning"
   | "role"
   | "serverUrl"
   | "sourceDeployment"

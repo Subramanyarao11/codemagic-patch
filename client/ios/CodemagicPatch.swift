@@ -189,31 +189,28 @@ public final class CodemagicPatch: NSObject {
     emittedAt: String
   ) {
     do {
-      try withCodemagicPatchMetricsLock {
-        let eventId = CodemagicPatchUtil.crashRollbackEventId(
-          deviceId: deviceId,
-          packageHash: packageHash,
-          failedAt: emittedAt
-        )
-        let event: [String: Any] = [
-          "event_id": eventId,
-          "event_name": "Failed",
-          "emitted_at": emittedAt,
-          "device_id": deviceId,
-          "deployment_key": deploymentKey,
-          "binary_version": binaryVersion,
-          "running_package_hash": NSNull(),
-          "target_package_hash": packageHash,
-          "platform": "ios",
-          "sdk_version": "0.0.0",
-          "attributes": [
-            "reason": "install_fail",
-            "failure_subtype": "crash_rollback"
-          ]
+      let eventId = CodemagicPatchUtil.crashRollbackEventId(
+        deviceId: deviceId,
+        packageHash: packageHash,
+        failedAt: emittedAt
+      )
+      let event: [String: Any] = [
+        "event_id": eventId,
+        "event_name": "Failed",
+        "emitted_at": emittedAt,
+        "device_id": deviceId,
+        "deployment_key": deploymentKey,
+        "binary_version": binaryVersion,
+        "running_package_hash": NSNull(),
+        "target_package_hash": packageHash,
+        "platform": "ios",
+        "attributes": [
+          "reason": "install_fail",
+          "failure_subtype": "crash_rollback"
         ]
-        try storage.writeJson("events/\(eventId).json", event)
-        storage.enforceEventQueueCap()
-      }
+      ]
+      try storage.writeJson("events/\(eventId).json", event)
+      storage.enforceEventQueueCap()
     } catch {
     }
   }

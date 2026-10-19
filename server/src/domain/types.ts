@@ -333,7 +333,6 @@ export interface MetricEvent {
   runningPackageHash: string | null;
   targetPackageHash: string | null;
   deviceId: string;
-  sdkVersion: string | null;
   platform: string | null;
   attributes: Record<string, unknown> | null;
   /**

@@ -53,13 +53,43 @@ export async function enforceMutationSafety(
     );
   }
 
+  throw missingYesError(input);
+}
+
+/**
+ * The same gate, asked before anything is read. A command whose note names
+ * what it looked up (an app's name, the team it is in) can only call
+ * enforceMutationSafety after those reads; this lets it refuse a run that
+ * could neither skip nor answer the confirm before it sends a request.
+ */
+export function assertMutationConfirmable(
+  deps: CommandDeps,
+  input: Omit<MutationSafetyInput, "fields">,
+): void {
+  if (input.dryRun === true || input.yes) {
+    return;
+  }
+
+  if (
+    canPromptOnStderr(deps, input.nonInteractive) &&
+    deps.confirm !== undefined
+  ) {
+    return;
+  }
+
+  throw missingYesError(input);
+}
+
+function missingYesError(
+  input: Pick<MutationSafetyInput, "commandName" | "dryRun">,
+): UsageError {
   // Only commands that actually accept --dry-run pass `dryRun` here, so the
   // suggestion never points at a flag the command would reject.
   const dryRunHint =
     input.dryRun === undefined
       ? ""
       : ", or use --dry-run to inspect the payload first";
-  throw new UsageError(
+  return new UsageError(
     `Missing --yes for ${input.commandName}. Re-run with --yes after validating the command inputs${dryRunHint}.`,
   );
 }

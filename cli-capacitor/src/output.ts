@@ -7,6 +7,21 @@ export type WritableStream = {
 
 export type OutputFormat = "json" | "text";
 
+/**
+ * The format a result is printed in: the one `--format` asked for, else `text` on a
+ * terminal and `json` when stdout is piped — `cmpatch`'s rule (cli/src/output.ts
+ * `selectStructuredOutputFormat`), so a script or an agent capturing stdout gets JSON
+ * from either CLI without asking. Only the printed result follows this default: whether
+ * a command may prompt, and whether progress lines go to stderr, follow `--format` as
+ * given (`readFormat`), as in `cmpatch`, where only an explicit `json` never prompts.
+ */
+export function selectOutputFormat(
+  requested: OutputFormat | undefined,
+  stdout: WritableStream,
+): OutputFormat {
+  return requested ?? (stdout.isTTY === true ? "text" : "json");
+}
+
 export function writeLine(stream: WritableStream, line: string): void {
   stream.write(`${line}\n`);
 }

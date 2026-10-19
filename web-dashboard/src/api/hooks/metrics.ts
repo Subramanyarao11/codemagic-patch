@@ -13,7 +13,6 @@ import {
   keepPreviousData,
   useInfiniteQuery,
   useQuery,
-  type QueryClient,
 } from "@tanstack/react-query";
 
 import { authenticatedRequest } from "../client";
@@ -122,19 +121,6 @@ export function useDeploymentTimeseries(
     queryFn: ({ signal }) =>
       fetchDeploymentTimeseries(deploymentId, rangeDays, binaryVersion, signal),
     placeholderData: keepPreviousData,
-  });
-}
-
-export function prefetchDeploymentTimeseries(
-  queryClient: QueryClient,
-  deploymentId: string,
-  rangeDays: number,
-  binaryVersion: BinaryVersionFilter | null = null,
-) {
-  return queryClient.prefetchQuery({
-    queryKey: metricsKeys.timeseries(deploymentId, rangeDays, binaryVersion),
-    queryFn: ({ signal }) =>
-      fetchDeploymentTimeseries(deploymentId, rangeDays, binaryVersion, signal),
   });
 }
 

@@ -19,10 +19,10 @@ struct CodemagicPatchMetricEvent {
 /// "tolerate future reason codes" (specs/IMPLEMENTATION-PLAN.md Phase 5) true by
 /// construction rather than by an allowlist check.
 ///
-/// All operations are called from within a single caller-held lock
-/// (`CodemagicPatchMetricsDelivery.lock`) — this class itself performs no
-/// synchronization, matching upstream's actual `withCodemagicPatchMetricsLock` shape
-/// (client/specs/sdk-native/Spec.md § Thread Safety).
+/// Called from two threads without a lock: `enqueue` on Capacitor's plugin-call dispatch
+/// queue, `listPendingForFlush` and `remove` on the metrics queue. This class performs no
+/// synchronization; client/specs/metrics/Spec.md § Thread Safety lists the properties
+/// that make the interleaving safe.
 final class CodemagicPatchMetricsQueue {
     private static let maxQueueSize = 100
     private static let retentionSeconds: TimeInterval = 7 * 24 * 60 * 60
@@ -170,11 +170,6 @@ enum CodemagicPatchCrashRollbackEvent {
             "running_package_hash": NSNull(),
             "target_package_hash": packageHash,
             "platform": "capacitor",
-            // Keep in sync with package.json's "version" — same constant as
-            // src/protocol/events.ts's SDK_VERSION, enforced there by
-            // src/protocol/events.test.ts. Native has no runtime access to
-            // package.json (see that file's comment on why not to read it live).
-            "sdk_version": "0.1.0",
             "attributes": [
                 "reason": "install_fail",
                 "failure_subtype": "crash_rollback"

@@ -11,7 +11,7 @@ covers the two things that change on your side:
 
 Server setup is a prerequisite, not part of this guide. See
 [`docs/self-hosting-compose.md`](self-hosting-compose.md) for a production self-host
-([Part 1 of the root README](../README.md#part-1--run-the-server-self-host) is the
+(the [Install guide](https://patch.codemagic.io/docs/install) is the
 condensed version), or the [local quickstart](../README.md#quickstart--try-it-locally) to
 evaluate on a laptop first.
 

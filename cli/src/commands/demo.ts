@@ -262,7 +262,6 @@ async function waitUntilReleasePublished(
   await executeReleaseInspect(
     {
       kind: "release-inspect",
-      logs: false,
       release: { releaseId },
       serverUrl: SERVER_URL,
       timeoutSeconds: PUBLISH_WAIT_SECONDS,

@@ -14,7 +14,12 @@ internal object CodemagicPatchExecutors {
       Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "CodemagicPatchNetwork").apply { isDaemon = true }
       }
-  val metricsLock = Any()
+  // Metrics delivery gets its own thread so that a stalled upload never delays
+  // the manifest fetches and downloads queued on `network`.
+  val metrics: ScheduledExecutorService =
+      Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "CodemagicPatchMetrics").apply { isDaemon = true }
+      }
 
   // Shared pooled client for manifest / meta fetches: the ConnectionPool reuses
   // connections (HTTP/2 multiplexing) and callTimeout enforces the 10s manifest budget.

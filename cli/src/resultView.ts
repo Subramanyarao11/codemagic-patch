@@ -11,7 +11,20 @@
 
 import { isRecord, type Palette } from "./output";
 
-export type ObjectField = [label: string, path: string];
+/**
+ * A row no single path supplies: several values read as one, such as a probe's
+ * status together with whichever detail that status carries. `reads` names
+ * every path the row presents, so the remainder does not repeat them; a value
+ * it does not name still appears there, as for any curated field.
+ */
+export type DerivedObjectField = {
+  /** The row's value; undefined leaves the row out, like an absent path. */
+  cell: (record: Record<string, unknown>) => unknown;
+  label: string;
+  reads: readonly string[];
+};
+
+export type ObjectField = [label: string, path: string] | DerivedObjectField;
 
 /**
  * A labelled record: aligned, unruled, and quiet about the labels so the values
@@ -112,13 +125,13 @@ function withRemainder(
   fields: readonly ObjectField[],
 ): Array<[string, unknown]> {
   const declared = fields
-    .map(([label, path]): [string, unknown, string] => [
-      label,
-      readPath(value, path),
-      path,
-    ])
+    .map((field): [string, unknown, readonly string[]] =>
+      Array.isArray(field)
+        ? [field[0], readPath(value, field[1]), [field[1]]]
+        : [field.label, field.cell(value), field.reads],
+    )
     .filter(([, cell]) => cell !== undefined);
-  const covered = new Set(declared.map(([, , path]) => path));
+  const covered = new Set(declared.flatMap(([, , paths]) => paths));
 
   return [
     ...declared.map(([label, cell]): [string, unknown] => [label, cell]),
@@ -126,7 +139,8 @@ function withRemainder(
   ];
 }
 
-function readPath(value: unknown, path: string): unknown {
+/** The value at a dotted path, as the object view's fields name them. */
+export function readPath(value: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((current, key) => {
     return isRecord(current) ? current[key] : undefined;
   }, value);

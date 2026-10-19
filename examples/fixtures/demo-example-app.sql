@@ -258,7 +258,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_stg_v1_' || lower(e.event_name) || '_' || g,
@@ -283,7 +283,6 @@ SELECT
   'demo_ex_stg_pkg_v1',
   'demo_ex_stg_pkg_v1',
   'device_demo_stg_v1_' || g,
-  '0.1.0',
   CASE WHEN g % 2 = 0 THEN 'ios' ELSE 'android' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -303,7 +302,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_stg_v2_' || lower(e.event_name) || '_' || g,
@@ -328,7 +327,6 @@ SELECT
   'demo_ex_stg_pkg_v2',
   'demo_ex_stg_pkg_v2',
   'device_demo_stg_v2_' || g,
-  '0.1.0',
   CASE WHEN g % 3 = 0 THEN 'android' ELSE 'ios' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -348,7 +346,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_stg_v3_' || lower(e.event_name) || '_' || g,
@@ -373,7 +371,6 @@ SELECT
   'demo_ex_stg_pkg_v3',
   'demo_ex_stg_pkg_v3',
   'device_demo_stg_v3_' || g,
-  '0.1.0',
   CASE WHEN g % 2 = 0 THEN 'ios' ELSE 'android' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -393,7 +390,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_stg_v4_' || lower(e.event_name) || '_' || g,
@@ -408,7 +405,6 @@ SELECT
   'demo_ex_stg_pkg_v4',
   'demo_ex_stg_pkg_v4',
   'device_demo_stg_v4_' || g,
-  '0.1.0',
   'ios',
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -427,7 +423,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_prd_v1_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
@@ -448,7 +444,6 @@ SELECT
   'demo_ex_prd_pkg_v1',
   'demo_ex_prd_pkg_v1',
   'device_demo_prd_v1_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
-  '0.1.0',
   CASE WHEN g % 2 = 0 THEN 'ios' ELSE 'android' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -484,7 +479,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_prd_v2_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
@@ -505,7 +500,6 @@ SELECT
   'demo_ex_prd_pkg_v2',
   'demo_ex_prd_pkg_v2',
   'device_demo_prd_v2_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
-  '0.1.0',
   CASE WHEN g % 3 = 0 THEN 'android' ELSE 'ios' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -535,7 +529,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_prd_v3_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
@@ -556,7 +550,6 @@ SELECT
   'demo_ex_prd_pkg_v3',
   'demo_ex_prd_pkg_v3',
   'device_demo_prd_v3_' || lower(e.event_name) || '_' || day.day_offset || '_' || g,
-  '0.1.0',
   CASE WHEN g % 2 = 0 THEN 'ios' ELSE 'android' END,
   CASE
     WHEN e.event_name IN ('Downloaded', 'Ready', 'Applied')
@@ -589,7 +582,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes
+  device_id, platform, attributes
 )
 SELECT
   'me_demo_ex_prd_active_' || d.day_offset || '_' || dev.n,
@@ -617,7 +610,6 @@ SELECT
     ELSE 'demo_ex_prd_pkg_v3'
   END,
   'device_demo_prd_dau_' || dev.n,
-  '0.1.0',
   CASE WHEN dev.n % 2 = 0 THEN 'ios' ELSE 'android' END,
   NULL
 FROM generate_series(0, 28) AS d(day_offset)
@@ -670,7 +662,7 @@ INSERT INTO metric_event (
   id, event_id, event_name, emitted_at,
   team_id, app_id, deployment_id, deployment_key,
   binary_version, running_package_hash, target_package_hash,
-  device_id, sdk_version, platform, attributes, failure_payload
+  device_id, platform, attributes, failure_payload
 )
 SELECT
   'me_demo_ex_' || f.cohort || '_failed_' || f.kind || '_' || g,
@@ -685,7 +677,6 @@ SELECT
   r.package_hash,
   r.package_hash,
   'device_demo_' || f.cohort || '_fail_' || f.kind || '_' || g,
-  '0.1.0',
   plat.platform,
   jsonb_strip_nulls(jsonb_build_object(
     'reason', k.reason,

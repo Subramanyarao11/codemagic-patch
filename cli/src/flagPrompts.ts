@@ -13,7 +13,7 @@ import {
   type CommandDeps,
 } from "./commands/shared";
 import { isRecord, writeLine } from "./output";
-import type { PromptFn } from "./prompt";
+import type { PromptFn, SelectChoice } from "./prompt";
 
 export type NamedResource = {
   id: string;
@@ -170,11 +170,20 @@ export async function promptChoice(
   message: string,
   choices: readonly string[],
 ): Promise<string> {
-  const value = await prompt({
-    choices: choices.map((choice) => ({ title: choice, value: choice })),
+  return promptSelect(
+    prompt,
     message,
-    type: "select",
-  });
+    choices.map((choice) => ({ title: choice, value: choice })),
+  );
+}
+
+/** `promptChoice` for choices that carry their own title or hint. */
+export async function promptSelect(
+  prompt: PromptFn,
+  message: string,
+  choices: SelectChoice[],
+): Promise<string> {
+  const value = await prompt({ choices, message, type: "select" });
 
   return Array.isArray(value) ? (value[0] ?? "") : value;
 }
@@ -194,7 +203,23 @@ export async function listReleaseLabels(
   deploymentId: string,
   token: string | undefined,
 ): Promise<string[]> {
-  const labels: string[] = [];
+  const releases = await listReleaseChoices(deps, serverUrl, deploymentId, token);
+
+  return releases.map((release) => release.value);
+}
+
+/**
+ * The same list as `listReleaseLabels`, each label carrying its status and
+ * target binary version as a hint: enough to tell a disabled or
+ * other-version release apart before picking it.
+ */
+export async function listReleaseChoices(
+  deps: CommandDeps,
+  serverUrl: string,
+  deploymentId: string,
+  token: string | undefined,
+): Promise<SelectChoice[]> {
+  const labels: SelectChoice[] = [];
   let rows = 0;
   let offset = 0;
 
@@ -223,12 +248,25 @@ export async function listReleaseLabels(
     // deployment unless it is caught here.
     rows += response.releases.length;
     labels.push(
-      ...response.releases
-        .filter(isRecord)
-        .map((entry) =>
-          isRecord(entry.release) ? entry.release.release_label : undefined,
-        )
-        .filter((label): label is string => typeof label === "string"),
+      ...response.releases.filter(isRecord).flatMap((entry) => {
+        const release = isRecord(entry.release) ? entry.release : undefined;
+
+        if (typeof release?.release_label !== "string") {
+          return [];
+        }
+
+        const hint = [release.status, release.target_binary_version]
+          .filter((part): part is string => typeof part === "string")
+          .join(" · ");
+
+        return [
+          {
+            ...(hint.length > 0 ? { hint } : {}),
+            title: release.release_label,
+            value: release.release_label,
+          },
+        ];
+      }),
     );
 
     // A server that does not page (no well-formed pagination block) has sent

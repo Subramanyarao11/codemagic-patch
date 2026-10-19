@@ -29,6 +29,22 @@ export class HttpProblemError extends Error {
   }
 }
 
+/**
+ * A 501 for a route this CLI knows: the server has nothing behind it, because
+ * it predates the feature or the deployment turned it off. That is one fact
+ * about the server, so a person reads it as the one sentence in `message`
+ * rather than as a problem record. It stays an HttpProblemError so
+ * `--format json` still forwards the server's problem as it came, and the exit
+ * code still follows the documented problem mapping.
+ */
+export class ServerFeatureUnavailableError extends HttpProblemError {
+  constructor(source: HttpProblemError, message: string) {
+    super(source.problem, source.responseStatus, source.serverUrl);
+    this.name = "ServerFeatureUnavailableError";
+    this.message = message;
+  }
+}
+
 export function exitCodeForProblemDetails(
   problem: ProblemDetails,
   responseStatus: number,

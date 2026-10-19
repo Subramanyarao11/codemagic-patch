@@ -13,11 +13,9 @@
 // `detail` still spells out the `cmpatch` command to run, so adding a hint
 // there would say the same thing twice.
 
-import { SOURCE_REPO_URL } from "./branding";
+import { CODE_SIGNING_DOCS_URL } from "./branding";
 import { isRecord } from "./output";
-import type { ProblemDetails } from "./problem-details";
-
-const CODE_SIGNING_DOCS_URL = `${SOURCE_REPO_URL}#code-signing-optional`;
+import { getProblemTypeSuffix, type ProblemDetails } from "./problem-details";
 
 const SIGNING_COMMANDS =
   "`cmpatch bundle --private-key-path <pem>` or `cmpatch release-react --private-key-path <pem>`";
@@ -78,4 +76,80 @@ function missingSignatureField(
   // An upload is the other case, and the one a server that named no field can
   // still be helped with: it is the only one where re-running is the answer.
   return namesStoredRelease ? "signature" : "metadata.signature";
+}
+
+/** What `app transfer` knows about the request a problem answered. */
+export type AppTransferProblemContext = {
+  appName: string;
+  /** The destination's name when one was resolved, otherwise its id. */
+  destTeam: string;
+};
+
+/**
+ * The transfer route's problems carry no `reason`, and the statuses they use
+ * mean something else on other routes — a 403 anywhere is "forbidden" — so
+ * these are keyed on status, type and field error, and applied only to the
+ * transfer request itself, never at the point every problem enters the CLI.
+ */
+export function withAppTransferProblemHint(
+  problem: ProblemDetails,
+  context: AppTransferProblemContext,
+): ProblemDetails {
+  if (typeof problem.hint === "string" && problem.hint.length > 0) {
+    return problem;
+  }
+
+  const hint = findAppTransferHint(problem, context);
+
+  return hint === undefined ? problem : { ...problem, hint };
+}
+
+function findAppTransferHint(
+  problem: ProblemDetails,
+  { appName, destTeam }: AppTransferProblemContext,
+): string | undefined {
+  const typeSuffix = getProblemTypeSuffix(problem.type);
+
+  // The same-team refusal: the only `team_id` error the route reports as an
+  // invalid value (a missing or blank one is `required` / `invalid_type`).
+  if (
+    problem.status === 400 &&
+    typeSuffix === "validation-error" &&
+    hasFieldError(problem, "team_id", "invalid_value")
+  ) {
+    return `App ${appName} is already in team ${destTeam}. Pass another team with --dest-team or --dest-team-id; \`cmpatch team list\` shows them.`;
+  }
+
+  // The route checks manage on the app, then create in the destination, and
+  // answers both refusals the same way.
+  if (problem.status === 403 && typeSuffix === "forbidden") {
+    return `You cannot create apps in team ${destTeam}, or cannot manage app ${appName}; a transfer needs both. Ask an admin of team ${destTeam} for a role that can create apps.`;
+  }
+
+  // The name clash, not the active-release-job conflict, which carries the
+  // job it is waiting for.
+  if (
+    problem.status === 409 &&
+    typeSuffix === "app-conflict" &&
+    problem.active_job === undefined
+  ) {
+    return `Team ${destTeam} already has an app named ${appName}. Rename one of them first with \`cmpatch app rename\`.`;
+  }
+
+  return undefined;
+}
+
+function hasFieldError(
+  problem: ProblemDetails,
+  field: string,
+  reason: string,
+): boolean {
+  const fieldErrors = Array.isArray(problem.errors) ? problem.errors : [];
+
+  return fieldErrors.some(
+    (fieldError) =>
+      isRecord(fieldError) &&
+      fieldError.field === field &&
+      fieldError.reason === reason,
+  );
 }

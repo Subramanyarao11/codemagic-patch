@@ -8,6 +8,8 @@ import {
 } from "@clack/prompts";
 
 export type SelectChoice = {
+  /** Shown beside the focused choice, for detail that would crowd the title. */
+  hint?: string;
   title: string;
   value: string;
 };
@@ -113,6 +115,7 @@ export function createInteractivePrompt(
             initialValue: request.choices[request.initial ?? 0]?.value,
             message: request.message,
             options: request.choices.map((choice) => ({
+              ...(choice.hint === undefined ? {} : { hint: choice.hint }),
               label: choice.title,
               value: choice.value,
             })),

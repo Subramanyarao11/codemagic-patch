@@ -11,12 +11,6 @@ import { hasOption } from "./argv";
 import type { PromptableFlag } from "./commandTypes";
 
 export type PromptableFlagIdentity = {
-  /**
-   * The flag parses as a boolean, so a replayed value must be spelled
-   * `--flag=value`: the parser reads a bare `--flag` as true and would reject
-   * a following `false` token as a stray positional.
-   */
-  boolean?: true;
   /** The name used in "Missing required flag --<label>". */
   label: string;
   /** Every spelling that supplies this flag, including id-shaped aliases. */
@@ -36,11 +30,6 @@ export const PROMPTABLE_FLAGS: Record<PromptableFlag, PromptableFlagIdentity> = 
   githubHandle: { label: "github-handle", options: ["--github-handle"] },
   role: { label: "role", options: ["--role"] },
   fromRole: { label: "from-role", options: ["--from-role"] },
-  requireCodeSigning: {
-    boolean: true,
-    label: "require-code-signing",
-    options: ["--require-code-signing"],
-  },
   serverUrl: { label: "server-url", options: ["--server-url"] },
   team: { label: "team", options: ["--team", "--team-id"] },
   app: { label: "app", options: ["--app", "--app-id"] },
@@ -100,19 +89,16 @@ export function primaryOptionFor(flag: PromptableFlag): string {
 }
 
 /**
- * The argv tokens that would supply this flag with this value, in a form the
- * parser actually accepts — the registry knows which flags must use the
- * `--flag=value` spelling, so callers cannot render an unrunnable pair.
+ * The argv tokens that would supply this flag with this value. Every promptable
+ * flag takes a value; a boolean one would need the `--flag=value` spelling,
+ * because the parser reads a bare `--flag` as true and rejects a following
+ * `false` token as a stray positional.
  */
 export function formatFlagAssignment(
   flag: PromptableFlag,
   value: string,
 ): string[] {
-  const option = primaryOptionFor(flag);
-
-  return PROMPTABLE_FLAGS[flag].boolean === true
-    ? [`${option}=${value}`]
-    : [option, value];
+  return [primaryOptionFor(flag), value];
 }
 
 /** Whether any spelling of this flag appears in argv, in either value form. */

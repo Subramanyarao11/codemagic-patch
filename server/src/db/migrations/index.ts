@@ -15,6 +15,7 @@ import { metricEventFailureFeedMigration } from "./0014_metricEventFailureFeed";
 import { metricEventDeviceOutcomeMigration } from "./0015_metricEventDeviceOutcome";
 import { metricEventLifecycleNamesMigration } from "./0016_metricEventLifecycleNames";
 import { appFrameworkMigration } from "./0017_appFramework";
+import { dropMetricEventSdkVersionMigration } from "./0018_dropMetricEventSdkVersion";
 
 export interface SqlMigration {
   name: string;
@@ -39,4 +40,5 @@ export const dbMigrations: readonly SqlMigration[] = [
   metricEventDeviceOutcomeMigration,
   metricEventLifecycleNamesMigration,
   appFrameworkMigration,
+  dropMetricEventSdkVersionMigration,
 ];

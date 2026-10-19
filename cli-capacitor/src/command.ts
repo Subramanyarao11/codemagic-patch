@@ -56,6 +56,17 @@ export type CommandOutput =
       json: unknown;
       kind: "action";
       summary: string;
+    }
+  | {
+      /**
+       * Exit code for a result that is itself a verdict (`doctor`: 1 when a check
+       * failed). The output is still printed; omitted means 0.
+       */
+      exitCode?: number;
+      json: unknown;
+      kind: "report";
+      /** The complete text rendering, written as it is. */
+      text: string;
     };
 
 export interface CommandDefinition {
@@ -94,7 +105,7 @@ export const CONNECTION_FLAGS: readonly FlagSpec[] = [
 ];
 
 export const FORMAT_FLAG: FlagSpec = {
-  help: "Output format: text (default) or json. json never prompts",
+  help: "Output format: text or json; text on a terminal, json when stdout is piped. An explicit json never prompts",
   name: "format",
   type: "string",
   value: "text|json",
@@ -194,10 +205,11 @@ export function readBoolean(values: FlagValues, name: string): boolean {
   return values[name] === true;
 }
 
-export function readFormat(values: FlagValues): OutputFormat {
+/** `--format` as given, validated; `undefined` when it was not passed. */
+export function readRequestedFormat(values: FlagValues): OutputFormat | undefined {
   const value = readString(values, "format");
   if (value === undefined) {
-    return "text";
+    return undefined;
   }
 
   if (value !== "json" && value !== "text") {
@@ -205,6 +217,15 @@ export function readFormat(values: FlagValues): OutputFormat {
   }
 
   return value;
+}
+
+/**
+ * `--format` as given, `text` when it was not: what decides whether a command may
+ * prompt and whether it reports progress on stderr. The printed result's format is
+ * `selectOutputFormat`'s, which also looks at whether stdout is piped.
+ */
+export function readFormat(values: FlagValues): OutputFormat {
+  return readRequestedFormat(values) ?? "text";
 }
 
 export function readInteger(

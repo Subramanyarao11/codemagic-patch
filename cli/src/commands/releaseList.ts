@@ -2,6 +2,7 @@ import type { ReleaseListCommand } from "../commandTypes";
 import { authenticatedRequest } from "../authenticatedRequest";
 import { resolveDeploymentId } from "./resolveNames";
 import {
+  binaryVersionFilterQuery,
   buildApiUrlWithQuery,
   type CommandDeps,
 } from "./shared";
@@ -27,6 +28,7 @@ export async function executeReleaseList(
       command.serverUrl,
       `/v1/deployments/${encodeURIComponent(deploymentId)}/releases`,
       {
+        ...binaryVersionFilterQuery(command),
         include: command.includeMetrics === true ? "metrics" : undefined,
         limit: command.limit,
         offset: command.offset,

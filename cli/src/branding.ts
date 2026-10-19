@@ -37,6 +37,11 @@ export const CLOUDFLARE_ENABLE_LATER_URL = `${PATCH_DOCS_SITE_URL}/setup/cloudfl
 export const NATIVE_SETUP_DOCS_URL = `${PATCH_DOCS_SITE_URL}/setup/native-setup`;
 export const FIRST_RELEASE_DOCS_URL = `${PATCH_DOCS_SITE_URL}/setup/first-release`;
 
+// The code-signing guide, opened on its React Native tab because every
+// signing command this CLI can name is a `cmpatch` one. Printed when the
+// server rejects an unsigned release for an app that requires signing.
+export const CODE_SIGNING_DOCS_URL = `${PATCH_DOCS_SITE_URL}/using-patch/security?sdk=react-native#code-signing-update-integrity`;
+
 // How to see the Cloudflare cache at work. Needs a published release, which
 // the install summary that used to print the check inline never had.
 export const CLOUDFLARE_VERIFY_DOCS_URL = `${PATCH_DOCS_SITE_URL}/setup/cloudflare#verify`;

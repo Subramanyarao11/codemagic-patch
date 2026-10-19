@@ -3,6 +3,10 @@ import { authenticatedRequest } from "../authenticatedRequest";
 import { resolveAppId } from "./resolveNames";
 import { buildApiUrl, type CommandDeps } from "./shared";
 
+/**
+ * Without a setting flag this is a read of the app; with one it is the update.
+ * Both routes answer `{ app }`, so one view renders either result.
+ */
 export async function executeAppSetting(
   command: AppSettingCommand,
   deps: CommandDeps,
@@ -13,6 +17,19 @@ export async function executeAppSetting(
     command.token,
     deps,
   );
+  const url = buildApiUrl(
+    command.serverUrl,
+    `/v1/apps/${encodeURIComponent(appId)}`,
+  );
+
+  if (command.requireCodeSigning === undefined) {
+    return authenticatedRequest(deps, {
+      init: { method: "GET" },
+      serverUrl: command.serverUrl,
+      token: command.token,
+      url,
+    });
+  }
 
   return authenticatedRequest(deps, {
     init: {
@@ -26,6 +43,6 @@ export async function executeAppSetting(
     },
     serverUrl: command.serverUrl,
     token: command.token,
-    url: buildApiUrl(command.serverUrl, `/v1/apps/${encodeURIComponent(appId)}`),
+    url,
   });
 }

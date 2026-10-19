@@ -9,7 +9,7 @@ import type { Artifact } from "@codemagic/patch-shared";
 
 import { useCreateReleaseFromArtifact } from "../../../api/hooks/releases";
 import { HttpProblemError } from "../../../api/problem";
-import { SOURCE_REPO_URL } from "../../../branding";
+import { PATCH_DOCS_SITE_URL } from "../../../branding";
 import { useToast } from "../../../components/overlay/ToastProvider";
 import { toastReleaseWarnings } from "./releaseWarnings";
 import { buttonVariants } from "../../../components/ui/Button";
@@ -53,7 +53,9 @@ import {
   type ReleasePublicationFlowState,
 } from "../../../model/releasePublicationFlow";
 
-const README_CODE_SIGNING_URL = `${SOURCE_REPO_URL}#code-signing-optional`;
+// A .cmpatch artifact comes from `cmpatch bundle`, so open the guide on its
+// React Native tab.
+const CODE_SIGNING_DOCS_URL = `${PATCH_DOCS_SITE_URL}/using-patch/security?sdk=react-native#code-signing-update-integrity`;
 
 export interface UseUploadArtifactFormOptions {
   deploymentId: string;
@@ -518,11 +520,11 @@ function ErrorSlot({
           , then upload the signed artifact. Start with the{" "}
           <a
             className="font-bold underline underline-offset-2"
-            href={README_CODE_SIGNING_URL}
+            href={CODE_SIGNING_DOCS_URL}
             target="_blank"
             rel="noreferrer"
           >
-            README code signing guide
+            code signing guide
           </a>
           .
         </div>

@@ -70,7 +70,8 @@ reset during recovery; other Docker projects are left alone.
 | Group | Description |
 | --- | --- |
 | `release` | Publish, inspect, patch, promote, and roll back OTA releases. |
-| `management` | Manage apps, deployments, and deployment history. |
+| `management` | List teams; manage apps and deployments. |
+| `metrics` | Counters, daily time series, and failure drill-down for deployments and releases. |
 | `auth` | Authenticate, manage tokens, and manage team members. |
 | `diagnostics` | Diagnose local setup and OTA readiness (`cmpatch doctor`). |
 | `config` | Store defaults, wire the SDK, and inspect the effective local context. |

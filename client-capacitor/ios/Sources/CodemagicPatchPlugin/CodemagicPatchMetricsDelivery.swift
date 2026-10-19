@@ -9,12 +9,12 @@ import Foundation
 import UIKit
 
 /// Batches and delivers the metrics WAL to `POST {apiUrl}/v1/metrics/events`
-/// (client/specs/metrics/Spec.md § Delivery Strategy). Enqueue and flush both run
-/// through `lock`, so a flush triggered by app-foreground entry can never tear a write
-/// triggered by a concurrent plugin call — the two can arrive on different threads
-/// (Capacitor's own plugin-call dispatch queue vs. this class's own serial queue),
-/// unlike every other native method in this project, which Capacitor's single dispatch
-/// queue already serializes.
+/// (client/specs/metrics/Spec.md § Delivery Strategy). `enqueue` runs on Capacitor's
+/// plugin-call dispatch queue and the flush on this class's own serial queue, with no
+/// lock between them: the queue is safe to interleave for the reasons in
+/// client/specs/metrics/Spec.md § Thread Safety. A lock held across the upload would let
+/// one stalled request block `enqueue`, and with it the dispatch queue that every plugin
+/// in the app shares.
 final class CodemagicPatchMetricsDelivery {
     private static let batchLimit = 100
     private static let maxRetryAttempts = 5
@@ -26,10 +26,8 @@ final class CodemagicPatchMetricsDelivery {
     // ~30s a real cap would take — see CodemagicPatchMetricsDeliveryTests.swift.
     private let baseRetryInterval: TimeInterval
     private let maxRetryInterval: TimeInterval
-    private let lock = NSLock()
-    // A dedicated serial queue, not a concurrent one: "serialize all metrics queue
-    // operations on the native I/O executor" (client/specs/sdk-native/Spec.md § Thread
-    // Safety) — a concurrent queue would let a delayed retry race a fresh flush.
+    // A dedicated serial queue, not a concurrent one: a concurrent queue would let a
+    // delayed retry race a fresh flush, and the retry state below is only ever touched here.
     private let dispatchQueue = DispatchQueue(label: "io.codemagic.patch.metrics")
 
     private var retryAttempt = 0
@@ -53,8 +51,6 @@ final class CodemagicPatchMetricsDelivery {
     /// once the write attempt has actually completed, per client/specs/metrics/Spec.md §
     /// Native Queue Bridge Contract.
     func enqueue(_ eventJson: String) {
-        lock.lock()
-        defer { lock.unlock() }
         queue.enqueue(eventJson)
     }
 
@@ -67,16 +63,13 @@ final class CodemagicPatchMetricsDelivery {
         guard !apiUrl.isEmpty else { return }
         let trimmed = apiUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         dispatchQueue.async { [weak self] in
-            self?.flushLocked(apiUrl: trimmed)
+            self?.flush(apiUrl: trimmed)
         }
     }
 
-    private func flushLocked(apiUrl: String) {
-        lock.lock()
-        defer { lock.unlock() }
-
+    private func flush(apiUrl: String) {
         if isRetryDeferred() { return }
-        // Clear it here, under the lock, whether this call is a fresh foreground-entry
+        // Clear it here, on the serial queue, whether this call is a fresh foreground-entry
         // flush (where it's already false) or the scheduled retry's own invocation
         // (where this is the "the wait is over" transition) — see scheduleRetry.
         retryScheduled = false
@@ -189,7 +182,7 @@ final class CodemagicPatchMetricsDelivery {
         backoffUntil = Date().addingTimeInterval(delay)
 
         dispatchQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.flushLocked(apiUrl: apiUrl)
+            self?.flush(apiUrl: apiUrl)
         }
     }
 }

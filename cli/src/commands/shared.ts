@@ -5,6 +5,8 @@ import type { DnsClient } from "../selfhostDns";
 import type { ProbeTlsName } from "../selfhostTls";
 import type { TcpConnect } from "../selfhostInstall";
 import { isInteractiveOutput, type WritableStream } from "../output";
+import { HttpProblemError, ServerFeatureUnavailableError } from "../problem-details";
+import type { BinaryVersionFilterFlags } from "../commandTypes";
 import type { ConfirmFn, PromptFn } from "../prompt";
 
 export class UsageError extends Error {
@@ -205,6 +207,27 @@ export function buildApiUrl(serverUrl: string, pathname: string): string {
 }
 
 /**
+ * The request, with a 501 answered by `unavailableMessage`: the server has the
+ * route but nothing behind it, which the user should read as one sentence
+ * about that server rather than as a failed request. Every other outcome,
+ * including other problems, passes through untouched.
+ */
+export async function withUnavailableFeatureMessage<T>(
+  request: Promise<T>,
+  unavailableMessage: string,
+): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof HttpProblemError && error.responseStatus === 501) {
+      throw new ServerFeatureUnavailableError(error, unavailableMessage);
+    }
+
+    throw error;
+  }
+}
+
+/**
  * Validates a server URL and returns it trimmed. Used both at input time
  * (config set / init / login, to reject before a bad value is stored) and as
  * the last-line defense inside buildApiUrl / buildApiUrlWithQuery, so EVERY path
@@ -275,6 +298,16 @@ export function buildApiUrlWithQuery(
   }
 
   return url.toString();
+}
+
+/** The server's query pair for BinaryVersionFilterFlags; unset flags are omitted. */
+export function binaryVersionFilterQuery(
+  filter: BinaryVersionFilterFlags,
+): Record<"binary_version" | "binary_version_prefix", string | undefined> {
+  return {
+    binary_version: filter.binaryVersion,
+    binary_version_prefix: filter.binaryVersionPrefix,
+  };
 }
 
 export async function ensureReadableFile(

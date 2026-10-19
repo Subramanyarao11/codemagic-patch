@@ -47,17 +47,28 @@ The optional `--fix --server-url https://patch.example.com` workflow can create 
   </TabItem>
   <TabItem value="capacitor" label="Capacitor">
 
-`cmpatch doctor` supports React Native and Expo projects only, and `cmpatch-capacitor` has no equivalent. Check the following manually:
+Run `cmpatch-capacitor doctor` from the app's root. It checks the app's Patch configuration, the server and the download origin:
+
+```bash
+cmpatch-capacitor doctor
+cmpatch-capacitor doctor --platform android --verbose
+```
+
+Add `--verify-delivery` to check the published manifest and artifacts for the app's version too.
+
+Among other things, doctor reports:
 
 <div>
 
-- `deploymentKey` in each platform block matches the deployment you publish to (`cmpatch-capacitor deployment list`), and iOS and Android use different keys. `npx codemagic-patch-check-config <capacitor.config.json>` detects a shared key
-- No `Info.plist` / `strings.xml` override (`CodemagicPatchDeploymentKey` and others) replaces those values. Native resources take precedence
-- `apiUrl` is the server's `SERVER_URL`, and `downloadBaseUrl` exactly matches its `PUBLIC_BASE_URL`
-- `npx cap sync` was run after the last config change, and the installed build includes it
-- The release's target binary version matches the installed app version
+- A `deploymentKey`, `apiUrl` or `downloadBaseUrl` that is missing, malformed, or differs from the server's
+- A native override (`CodemagicPatchDeploymentKey` and others) that replaces the config value, or one only the build decides (a Gradle `resValue`, a product flavor, an Info.plist `$(SETTING)`). Doctor reports those as unresolved rather than guessing; pass `--platform` with `--app` and `--deployment` to check against a specific deployment
+- iOS and Android sharing one deployment key
+- A synced `capacitor.config.json` that is stale or missing (run `npx cap sync`), or a plugin missing from the synced plugin registration
+- Web sources that never call `start()` (or `sync()` and `notifyAppReady()`), and an unbuilt `webDir`
 
 </div>
+
+Doctor cannot see the installed build. Check that the release's target binary version matches the version installed on the device.
 
 Then check device logs and `cmpatch-capacitor release inspect` as described below.
 
@@ -102,6 +113,8 @@ cmpatch-capacitor release list --app MyApp-iOS --deployment Staging
 
   </TabItem>
 </SdkTabs>
+
+When a release reports failed devices, `cmpatch release metrics --format json` counts them by reason under `failure_reasons`. `cmpatch release failures --label <label> --reason <reason>` breaks one reason down by code (for `network`, the HTTP status, or `0` when no response arrived), adding `--code <code>` shows that code's most common messages and Android exit reasons, and `--no-code` does the same for failures that reported no code. `cmpatch release failure-events` with the same `--reason` and `--code` (or `--no-code`) lists the raw events, with the device ID and message of each.
 
 ### HTTP API spot checks
 

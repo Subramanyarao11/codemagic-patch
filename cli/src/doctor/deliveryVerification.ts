@@ -4,6 +4,7 @@ import { isPathSafeBinaryVersion } from "../targetBinaryVersion";
 import type { DoctorCheckResult } from "../commands/doctor";
 import { buildApiUrl, normalizeBearerToken } from "../commands/shared";
 import { httpUrl, safeUrl } from "./connectivity";
+import { isServerCredential } from "./credentials";
 
 type JsonResult = { status: number; body?: unknown; error?: string };
 class LimitError extends Error {}
@@ -356,7 +357,8 @@ export async function verifyDoctorDelivery(
     !httpUrl(input.downloadBaseUrl) ||
     !key ||
     !/^[A-Za-z0-9_-]+$/.test(key) ||
-    key.startsWith("cm_pat_") ||
+    // A server credential in a public URL path would hand the secret to the CDN.
+    isServerCredential(key) ||
     !input.version ||
     !isPathSafeBinaryVersion(input.version)
   ) {

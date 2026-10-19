@@ -22,7 +22,7 @@ class CodemagicPatchModule: NSObject {
       object: nil
     )
     if UIApplication.shared.applicationState == .active {
-      codemagicPatchNetworkQueue.async { [weak self] in
+      codemagicPatchMetricsQueue.async { [weak self] in
         self?.flushMetricEvents()
       }
     }
@@ -337,28 +337,26 @@ class CodemagicPatchModule: NSObject {
 
   @objc
   private func handleForegroundEntry() {
-    codemagicPatchNetworkQueue.async { [weak self] in
+    codemagicPatchMetricsQueue.async { [weak self] in
       self?.flushMetricEvents()
     }
   }
 
   private func commitMetricEvent(_ eventJson: String) {
     do {
-      try withCodemagicPatchMetricsLock {
-        let event = try JSONSerialization.jsonObject(with: Data(eventJson.utf8)) as? [String: Any]
-        let eventId = event?["event_id"] as? String ?? UUID().uuidString
-        guard isSafeEventId(eventId) else {
-          throw NSError(
-            domain: "CodemagicPatch",
-            code: 3,
-            userInfo: [NSLocalizedDescriptionKey: "unsafe metric event_id"]
-          )
-        }
-        let eventDictionary = event ?? [:]
-        try storage.writeJson("events/\(eventId).json", eventDictionary)
-        try applyMetricMetadataSideEffect(eventDictionary)
-        storage.enforceEventQueueCap()
+      let event = try JSONSerialization.jsonObject(with: Data(eventJson.utf8)) as? [String: Any]
+      let eventId = event?["event_id"] as? String ?? UUID().uuidString
+      guard isSafeEventId(eventId) else {
+        throw NSError(
+          domain: "CodemagicPatch",
+          code: 3,
+          userInfo: [NSLocalizedDescriptionKey: "unsafe metric event_id"]
+        )
       }
+      let eventDictionary = event ?? [:]
+      try storage.writeJson("events/\(eventId).json", eventDictionary)
+      try applyMetricMetadataSideEffect(eventDictionary)
+      storage.enforceEventQueueCap()
     } catch {
     }
   }
@@ -434,13 +432,16 @@ class CodemagicPatchModule: NSObject {
     }
   }
 
-  private func flushMetricEvents() {
-    withCodemagicPatchMetricsLock {
-      flushMetricEventsLocked()
-    }
-  }
+  /**
+   Runs on the metrics queue while io-queue work keeps writing to the same
+   queue. No lock is needed: see the queue invariants in the metrics Spec
+   §Thread Safety.
 
-  private func flushMetricEventsLocked() {
+   Never take a lock that io work also takes for the duration of the request.
+   The boot path waits on the io queue from the main thread, so a stalled
+   upload holding such a lock blocks bundle selection.
+   */
+  private func flushMetricEvents() {
     if isMetricFlushDeferred() { return }
 
     let apiUrl = config("CodemagicPatchApiUrl").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -542,7 +543,7 @@ class CodemagicPatchModule: NSObject {
     metricsRetryScheduled = true
     metricsBackoffUntil = Date().addingTimeInterval(delay)
 
-    codemagicPatchNetworkQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+    codemagicPatchMetricsQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
       guard let self else { return }
       self.metricsRetryScheduled = false
       self.flushMetricEvents()

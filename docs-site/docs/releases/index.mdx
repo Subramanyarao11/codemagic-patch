@@ -20,11 +20,11 @@ Shorter summaries and install links are on [GitHub Releases](https://github.com/
 
 | Surface | Notes | Latest | Upgrade |
 | --- | --- | --- | --- |
-| React Native SDK | [React Native](/docs/releases/react-native) | 0.5.0 | `npm install @codemagic/react-native-patch@latest` |
-| CLI (`cmpatch`) | [CLI](/docs/releases/cli) | 0.6.0 | `npm install -g @codemagic/patch-cli@latest` |
-| Server and dashboard | [Server](/docs/releases/server) | 0.6.0 | [`cmpatch selfhost upgrade`](/docs/reference/cli-reference#self-hosting) |
-| Capacitor SDK | [Capacitor SDK](/docs/releases/capacitor-sdk) | 0.1.0 | `npm install @codemagic/capacitor-patch@latest` |
-| CLI for Capacitor (`cmpatch-capacitor`) | [CLI for Capacitor](/docs/releases/capacitor-cli) | 0.1.0 | `npm install -g @codemagic/capacitor-patch-cli@latest` |
+| React Native SDK | [React Native](/docs/releases/react-native) | 0.5.1 | `npm install @codemagic/react-native-patch@latest` |
+| CLI (`cmpatch`) | [CLI](/docs/releases/cli) | 0.7.0 | `npm install -g @codemagic/patch-cli@latest` |
+| Server and dashboard | [Server](/docs/releases/server) | 0.7.0 | [`cmpatch selfhost upgrade`](/docs/reference/cli-reference#self-hosting) |
+| Capacitor SDK | [Capacitor SDK](/docs/releases/capacitor-sdk) | 0.1.1 | `npm install @codemagic/capacitor-patch@latest` |
+| CLI for Capacitor (`cmpatch-capacitor`) | [CLI for Capacitor](/docs/releases/capacitor-cli) | 0.2.0 | `npm install -g @codemagic/capacitor-patch-cli@latest` |
 
 ## Upgrade order and compatibility
 
@@ -44,6 +44,26 @@ configuration changes, and service restarts.
 | CLI for Capacitor [0.1.0](/docs/releases/capacitor-cli#v0-1-0) | Server 0.6.0 or newer | Sets the app framework, which older servers do not store; the dashboard then treats the app as a React Native app. |
 
 ## What shipped
+
+### 19th October 2026
+
+- **Server [0.7.0](/docs/releases/server#v0-7-0):** Deployment and release
+  pages fetch only the selected chart range; backups restart the exact
+  container they stopped; migration `0018` drops an unused column from
+  `metric_event`, so rolling back to an older image breaks metrics ingest.
+- **CLI [0.7.0](/docs/releases/cli#v0-7-0):** `member remove`, `member update`,
+  `member invite-revoke`, and `token revoke` confirm unless `--yes` (breaking
+  for scripts); `server status`, `team list` / `show`, and `app transfer`;
+  deployment timeseries and failure drill-down from the CLI; binary version
+  filters on `release list`.
+- **React Native SDK [0.5.1](/docs/releases/react-native#v0-5-1):** React
+  Native 0.88 and Expo SDK 58; stalled metrics uploads no longer block update
+  checks, downloads, or other SDK calls.
+- **Capacitor SDK [0.1.1](/docs/releases/capacitor-sdk#v0-1-1):** Stalled
+  metrics uploads no longer block plugin calls or update downloads.
+- **CLI for Capacitor [0.2.0](/docs/releases/capacitor-cli#v0-2-0):** JSON
+  output when stdout is piped (breaking for scripts that read text); new
+  `cmpatch-capacitor doctor`.
 
 ### 6th October 2026
 

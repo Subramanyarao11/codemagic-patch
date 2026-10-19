@@ -65,6 +65,28 @@ cmpatch-capacitor release metrics --app MyApp-iOS --deployment Production --labe
   </TabItem>
 </SdkTabs>
 
+### Daily time series
+
+`cmpatch deployment timeseries` prints the counters behind the dashboard's deployment chart, one row per UTC day:
+
+```bash
+cmpatch deployment timeseries --app MyApp --deployment Production --range 30d
+```
+
+`--range` takes `7d`, `30d`, `90d`, or `1y`; `--from` / `--to` set an explicit range instead. `ACTIVE` here is the devices active on that day, not the lifetime count of `deployment metrics`. `--format json` also carries one series per release. For a Capacitor app, pass the deployment ID from `cmpatch-capacitor deployment list` as `--deployment-id`.
+
+### Failure drill-down
+
+The `failure_reasons` in `deployment metrics --format json` (or `release metrics --format json`) count failed events by reason. Drill into one reason the way the dashboard's failure dialog does: its codes, then one code's top exit reasons and messages, then the single events.
+
+```bash
+cmpatch deployment failures --app MyApp --deployment Production --reason network
+cmpatch deployment failures --app MyApp --deployment Production --reason network --code 403
+cmpatch deployment failure-events --app MyApp --deployment Production --reason network --code 403
+```
+
+`--no-code` in place of `--code` opens the failures that reported no code (the `(no code)` row), not every code. `failure-events` prints a page of events, newest first; when more remain, the last line gives the `--cursor` to pass for the next page. `cmpatch release failures` and `cmpatch release failure-events` do the same for one release (`--label` or `--release-id`). For a Capacitor app, pass the IDs from `cmpatch-capacitor` as `--deployment-id` / `--release-id`.
+
 Typical event types include Downloaded, Ready, Applied, Failed, and Active.
 
 ## What to watch during a rollout

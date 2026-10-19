@@ -1,9 +1,8 @@
 import React, {useEffect, useRef, useState, type ReactNode} from 'react';
 import clsx from 'clsx';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import {useDoc} from '@docusaurus/plugin-content-docs/client';
 
-import {resolveMarkdownPath} from '@site/src/utils/resolveMarkdownPath';
+import {markdownTwinPath} from '@site/src/utils/markdownTwin';
 
 import styles from './styles.module.css';
 
@@ -11,10 +10,8 @@ type CopyState = 'idle' | 'copied' | 'error';
 type CopyTarget = 'markdown' | 'link';
 
 function useMdPath(): string {
-  const {metadata, frontMatter} = useDoc();
-  const slug =
-    typeof frontMatter.slug === 'string' ? frontMatter.slug : undefined;
-  return useBaseUrl(resolveMarkdownPath(metadata.id, slug));
+  const {metadata} = useDoc();
+  return markdownTwinPath(metadata.permalink);
 }
 
 function getAbsoluteUrl(path: string): string {
@@ -146,7 +143,7 @@ export default function SendToAI(): ReactNode {
   };
 
   const statusLabel = errorTarget
-    ? 'Copy failed — run npm run refresh:md, then restart the dev server'
+    ? 'Copy failed — try again'
     : copiedTarget === 'markdown'
       ? 'Markdown copied'
       : copiedTarget === 'link'

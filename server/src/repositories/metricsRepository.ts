@@ -36,7 +36,6 @@ export interface PersistMetricEventInput {
   id: string;
   platform: string | null;
   runningPackageHash: string | null;
-  sdkVersion: string | null;
   targetPackageHash: string | null;
 }
 
@@ -1027,14 +1026,13 @@ async function insertMetricEvent(
         running_package_hash,
         target_package_hash,
         device_id,
-        sdk_version,
         platform,
         attributes,
         failure_payload,
         created_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16, NOW()
+        $11, $12, $13, $14, $15, NOW()
       )
       ON CONFLICT (event_id) DO NOTHING
       RETURNING *
@@ -1052,7 +1050,6 @@ async function insertMetricEvent(
       input.runningPackageHash,
       input.targetPackageHash,
       input.deviceId,
-      input.sdkVersion,
       input.platform,
       input.attributes,
       input.failurePayload,

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { DoctorResult } from "../commands/doctor";
 import { resolveProjectConfigPath } from "../configStore";
 import { isRecord } from "../output";
+import { containsServerCredential } from "./credentials";
 
 export type DoctorFix = {
   id: "create-project-server-config";
@@ -24,7 +25,7 @@ export async function prepareDoctorFix(
   explicitServerUrl: string | undefined,
   result: DoctorResult,
 ): Promise<PreparedDoctorFix | undefined> {
-  if (!explicitServerUrl || ([...explicitServerUrl].some((char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127) || /cm_pat_|eyJ[A-Za-z0-9_-]+\./.test(explicitServerUrl))) return;
+  if (!explicitServerUrl || ([...explicitServerUrl].some((char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127) || containsServerCredential(explicitServerUrl) || /eyJ[A-Za-z0-9_-]+\./.test(explicitServerUrl))) return;
   try {
     const url = new URL(explicitServerUrl);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) return;

@@ -1,6 +1,6 @@
 {
   "name": "@codemagic/capacitor-patch-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Codemagic Patch CLI for publishing over-the-air updates of Capacitor / Ionic apps",
   "license": "Apache-2.0",
   "repository": {
@@ -36,14 +36,18 @@
     "fflate": "^0.8.2"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.7",
     "@codemagic/patch-server": "workspace:*",
     "@codemagic/patch-shared": "workspace:*",
     "esbuild": "^0.25.0",
     "eslint": "^9.36.0",
+    "fast-xml-parser": "^5.0.0",
+    "plist": "^3.0.6",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "xcode": "^3.0.1"
   },
   "scripts": {
     "build": "yarn exec node scripts/build.mjs",

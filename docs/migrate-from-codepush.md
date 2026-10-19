@@ -11,7 +11,7 @@ to Codemagic Patch. It covers the two things that change on your side:
 
 Server setup is a prerequisite, not part of this guide. See
 [`docs/self-hosting-compose.md`](self-hosting-compose.md) for a production
-self-host ([Part 1 of the root README](../README.md#part-1--run-the-server-self-host)
+self-host (the [Install guide](https://patch.codemagic.io/docs/install)
 is the condensed version), or the
 [local quickstart](../README.md#quickstart--try-it-locally) to evaluate on a
 laptop first.
@@ -223,7 +223,7 @@ does not set a default server URL — store it once with
 | Legacy | `cmpatch` | Notes |
 | --- | --- | --- |
 | `code-push app add/ls/rename/rm` | `cmpatch app create/list/rename/remove` | `app create` seeds `Staging` + `Production`, same as CodePush. Also new: `app show`, `app setting` (e.g. `--require-code-signing`) |
-| `code-push app transfer` | — | OSS self-host runs a single team; use `member` roles instead |
+| `code-push app transfer` | `cmpatch app transfer` | Destination by `--dest-team <name>` or `--dest-team-id <id>`; confirms unless `--yes` |
 | `code-push collaborator add/ls/rm` | `cmpatch member add/invite/list/update/remove` | Team-scoped roles (`viewer`/`developer`/`admin`/`owner`) instead of per-app collaborators |
 | `code-push deployment add/ls/rename/rm/clear` | `cmpatch deployment create/list/rename/remove/clear` | `deployment list` prints deployment keys; metrics live in `cmpatch deployment metrics` |
 | `code-push deployment history` | `cmpatch deployment history` | Alias for `release list --include metrics --limit 50` |
@@ -301,6 +301,6 @@ does not set a default server URL — store it once with
   output defaults to JSON, so the CLI is directly scriptable
   ([`cli/README.md` §Output formats](../cli/README.md#output-formats)).
 
-The complete command list lives in the root README's
-[CLI command reference](../README.md#cli-command-reference); run
+The complete command list lives in the
+[CLI command reference](https://patch.codemagic.io/docs/reference/cli-reference); run
 `cmpatch help` or `cmpatch <command> --help` for full flag semantics.

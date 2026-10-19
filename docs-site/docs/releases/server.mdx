@@ -20,6 +20,34 @@ Reference: [Configuration](/docs/reference/configuration) ·
 [Operations](/docs/reference/operations) ·
 [GitHub releases](https://github.com/codemagic-ci-cd/codemagic-patch/releases?q=codemagic-patch-server)
 
+## 0.7.0 {#v0-7-0}
+
+*19th October 2026*
+
+### Upgrade impact
+
+- **Migration:** The upgrade runs migration
+  `0018_drop_metric_event_sdk_version`, which drops the unused `sdk_version`
+  column from the `metric_event` table. The lock it takes is brief and the
+  table is not rewritten. Older SDKs that still send `sdk_version` keep
+  working; the server ignores the field.
+- **Rollback:** A server older than 0.7.0 still writes `sdk_version`, so after
+  this migration its metrics ingest fails. Restore the pre-upgrade backup
+  instead of only switching back to an older image.
+- No configuration change.
+
+### Fixes
+
+- **Deployment and release pages:** The pages now fetch only the selected
+  adoption chart range instead of all four. This reduces database load, and
+  the pages no longer stall under heavy usage.
+- **Backups:** A backup now restarts the exact server container it stopped.
+  Before, the restart could start a server with a different image or
+  configuration if either changed during the backup, as happens during
+  `cmpatch selfhost upgrade`.
+
+See the [server release](https://github.com/codemagic-ci-cd/codemagic-patch/releases/tag/codemagic-patch-server-v0.7.0).
+
 ## 0.6.0 {#v0-6-0}
 
 *6th October 2026*

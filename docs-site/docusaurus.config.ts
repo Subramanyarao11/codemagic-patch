@@ -2,9 +2,17 @@ import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
+import llmsPlugin from "./plugins/llms";
+
 const siteUrl = process.env.PATCH_DOCS_SITE_URL ?? "http://localhost:3002";
 const baseUrl = process.env.PATCH_DOCS_BASE_URL ?? "/docs/";
 const enablePlausible = siteUrl === "https://patch.codemagic.io";
+
+const llmsIndex = {
+  title: "Codemagic Patch documentation",
+  description:
+    "Self-hosted OTA updates for React Native: setup, SDK, cmpatch CLI, and operations.",
+};
 
 const config: Config = {
   title: "Codemagic Patch",
@@ -63,15 +71,17 @@ const config: Config = {
   ],
 
   plugins: [
+    // llms.txt and per-page markdown twins; see plugins/llms/index.ts.
+    (context) => llmsPlugin(context, llmsIndex),
+    // llms-full.txt only: its llms.txt and markdown files use doc-id paths
+    // that do not match page URLs.
     [
       "docusaurus-plugin-llms",
       {
-        generateLLMsTxt: true,
+        ...llmsIndex,
+        generateLLMsTxt: false,
         generateLLMsFullTxt: true,
-        generateMarkdownFiles: true,
-        title: "Codemagic Patch documentation",
-        description:
-          "Self-hosted OTA updates for React Native: setup, SDK, cmpatch CLI, and operations.",
+        generateMarkdownFiles: false,
         excludeImports: true,
         removeDuplicateHeadings: true,
       },

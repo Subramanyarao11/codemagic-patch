@@ -41,13 +41,14 @@ const TOP_LEVEL_SECTIONS: readonly {
       ["release-react", "Build a React Native bundle and publish it"],
       ["bundle", "Build a .cmpatch artifact without uploading"],
       ["release", "Inspect, patch, promote, and roll back releases"],
+      ["metrics", "Track adoption, daily trends, and failures"],
     ],
     title: "Release",
   },
   {
     rows: [
       ["app", "Manage apps"],
-      ["deployment", "Manage deployments and their history"],
+      ["deployment", "Manage deployments"],
       ["member", "Manage team members and invitations"],
       ["token", "Manage personal access tokens"],
       ["selfhost", "Install and maintain your own update server"],
@@ -153,10 +154,13 @@ function renderHelpTopic(topic: string, palette: Palette): string {
     return [
       `${group.name} commands`,
       "",
-      group.summary,
+      ...wrapText(group.summary, MAX_WIDTH),
       "",
       palette.heading("Commands:"),
       ...renderGroupedCommandSummaries(groupEntries),
+      ...(group.seeAlso === undefined
+        ? []
+        : ["", ...wrapText(group.seeAlso, MAX_WIDTH)]),
       "",
       palette.heading("Examples:"),
       ...group.examples.map((line) => `  $ ${line}`),

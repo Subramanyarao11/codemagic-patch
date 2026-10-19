@@ -18,6 +18,31 @@ npm install @codemagic/react-native-patch@latest
 Reference: [SDK reference](/docs/reference/sdk-reference) ·
 [GitHub releases](https://github.com/codemagic-ci-cd/codemagic-patch/releases?q=react-native-patch)
 
+## 0.5.1 {#v0-5-1}
+
+*19th October 2026*
+
+### React Native 0.88 and Expo SDK 58
+
+The SDK now supports React Native 0.88.0, tested with the New Architecture on
+Android and iOS. Expo SDK 58, which uses React Native 0.88.0, is supported and
+tested on Android and iOS.
+
+### Fixes
+
+- **Metrics uploads no longer block the SDK:** A metrics upload stuck on a
+  slow or unresponsive network no longer holds up bundle selection, update
+  downloads, `sync()`, or other SDK calls. On Android and iOS, metrics uploads
+  now run separately from update operations.
+
+### Other changes
+
+- **`sdk_version` removed from metrics events:** The SDK no longer sends the
+  unused `sdk_version` field. Servers still accept it from older SDKs, and
+  existing metrics data is unchanged.
+
+See the [SDK release](https://github.com/codemagic-ci-cd/codemagic-patch/releases/tag/%40codemagic/react-native-patch%400.5.1).
+
 ## 0.5.0 {#v0-5-0}
 
 *23rd September 2026* ·

@@ -1460,7 +1460,6 @@ export interface MetricEventIngestHandlerInput {
   id: string;
   platform: string | null;
   runningPackageHash: string | null;
-  sdkVersion: string | null;
   targetPackageHash: string | null;
 }
 

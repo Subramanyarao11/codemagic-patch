@@ -3,6 +3,7 @@ import { appCommands } from "./commands/app";
 import { authCommands } from "./commands/auth";
 import { configCommands } from "./commands/config";
 import { deploymentCommands } from "./commands/deployment";
+import { doctorCommand } from "./commands/doctor";
 import { releaseCreate } from "./commands/releaseCreate";
 import { releaseManageCommands } from "./commands/releaseManage";
 
@@ -14,6 +15,7 @@ export const COMMANDS: readonly CommandDefinition[] = [
   ...deploymentCommands,
   releaseCreate,
   ...releaseManageCommands,
+  doctorCommand,
 ];
 
 export function commandName(definition: CommandDefinition): string {

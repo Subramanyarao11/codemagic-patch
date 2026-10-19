@@ -24,6 +24,40 @@ Reference: [CLI reference](/docs/reference/cli-reference) ·
 [Binary versions for Capacitor](/docs/using-patch/binary-version-capacitor) ·
 [GitHub releases](https://github.com/codemagic-ci-cd/codemagic-patch/releases?q=capacitor-patch-cli)
 
+## 0.2.0 {#v0-2-0}
+
+*19th October 2026*
+
+### Breaking
+
+Without `--format`, `cmpatch-capacitor` now prints results as JSON when stdout
+is piped or redirected, as `cmpatch` does. On a terminal the output is still
+text. Scripts that read the text output from a pipe should pass
+`--format text`. Progress lines and prompts are unchanged: a piped run still
+asks before a change when someone is at the terminal, and only an explicit
+`--format json` never asks.
+
+### `cmpatch-capacitor doctor`
+
+`doctor` checks why an app may not receive updates, without changing
+anything. Run it from the app's root:
+
+```bash
+cmpatch-capacitor doctor
+```
+
+It reads the app's Capacitor configuration and checks the sign-in, the server
+connection, the app and deployment that each platform's deployment key belongs
+to, the native project setup, and the download origin. It reports deployment
+keys that are missing or do not match the app's settings. With
+`--verify-delivery` it also checks the published manifest and artifacts for
+the app's exact version. It ends by naming where to watch the SDK's logs on a
+device. It exits `1` when a check fails; `--platform` checks one platform and `--verbose`
+shows every check.
+
+See the [CLI reference](/docs/reference/cli-reference) and
+[CLI release](https://github.com/codemagic-ci-cd/codemagic-patch/releases/tag/%40codemagic/capacitor-patch-cli%400.2.0).
+
 ## 0.1.0 {#v0-1-0}
 
 *6th October 2026* ·

@@ -31,6 +31,8 @@ From this SDK:
 - Expo SDK 52+ (via the bundled config plugin — see [Expo apps](#expo-apps))
 - **Expo Go is not supported** — the native module is not part of the Expo Go runtime
 
+Reference fixture apps, including the Expo SDK 58 / RN 0.88.0 host, are listed in the [E2E fixture workspace](e2e/fixture-app/README.md).
+
 ## Installation
 
 ```sh

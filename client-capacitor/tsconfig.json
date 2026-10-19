@@ -25,12 +25,6 @@
     "noUncheckedIndexedAccess": true,
     "outDir": "dist/esm",
     "pretty": true,
-    // Only exercised by src/protocol/events.test.ts, importing package.json's version
-    // to assert it against the hardcoded SDK_VERSION constant (see events.ts) — tests
-    // aren't part of tsconfig.build.json's compilation graph (files: ["src/index.ts",
-    // "src/checkDeploymentKeys.ts"]), so this can't reintroduce the rootDir-inference
-    // problem a runtime `require("../../package.json")` used to cause there.
-    "resolveJsonModule": true,
     "sourceMap": true,
     "strict": true,
     "target": "es2017",

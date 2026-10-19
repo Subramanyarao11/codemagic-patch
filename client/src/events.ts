@@ -2,13 +2,6 @@ import type { MetricsEvent, RuntimePackage } from "./types";
 import NativeCodemagicPatch from "./NativeCodemagicPatch";
 import { nowIso, nowMs, state } from "./runtime";
 
-// package.json is the single source of truth for the SDK version (the iOS
-// podspec reads the same field). require (not import) keeps package.json out of
-// the emitted program so the build's rootDir (./src) constraint stays satisfied.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pkg: { version?: string } = require("../package.json");
-const SDK_VERSION = pkg.version ?? "0.0.0";
-
 const ACTIVE_DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function createMetricEvent(
@@ -51,7 +44,6 @@ function serializeMetricEvent(event: MetricsEvent): string {
     running_package_hash: runningPackageHash,
     target_package_hash: event.packageHash ?? null,
     platform: "react-native",
-    sdk_version: SDK_VERSION,
     attributes,
   });
 }

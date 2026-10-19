@@ -270,10 +270,11 @@ against your own Patch server.
 
 | Document | What it covers |
 | --- | --- |
+| [Patch documentation](https://patch.codemagic.io/docs) | The developer docs: [setting up a Capacitor app](https://patch.codemagic.io/docs/setup/native-setup-capacitor), checking for and applying updates, releasing, production control |
 | [Root README](../README.md) | Running and self-hosting the Patch server, the dashboard, the local evaluation stack |
 | [`cmpatch-capacitor`](../cli-capacitor/README.md) | The CLI: signing in, apps and deployment keys, publishing and operating releases, and what the target binary version has to guarantee |
 | [`PROTOCOL.md`](../PROTOCOL.md) | The client ↔ server delivery contract this SDK implements |
-| [Migrating from Appflow Live Updates](../docs/migrate-from-appflow.md) | Maps Appflow channels, config, and the JS API onto their Codemagic Patch equivalents |
+| [Migrating from Appflow Live Updates](https://patch.codemagic.io/docs/migration/migrating-from-appflow) | Maps Appflow channels, config, and the JS API onto their Codemagic Patch equivalents |
 | [`example-app/`](example-app/README.md) | Running the reference app against a Patch server |
 | [`src/protocol/`](src/protocol/README.md) | How the delivery-protocol layer maps onto the React Native client's sources |
 

@@ -1,10 +1,14 @@
 // Shared 7d / 30d / 90d / 1y presets for deployment timeseries charts.
-// Callers share query keys, so a visit to one screen warms the others.
+// Callers share query keys, so a range loaded on one screen is a cache hit on
+// the other. Only the selected range is fetched: the other presets are not
+// prefetched, because each one is a full scan of the deployment's events for
+// its window (the 90d / 1y windows take tens of seconds on a busy
+// deployment) and together they held the server's whole connection pool for
+// data most visits never looked at. Switching ranges keeps the previous
+// chart on screen (`keepPreviousData`) while the new window loads.
 
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { prefetchDeploymentTimeseries } from "../../api/hooks/metrics";
 import {
   NO_BINARY_VERSION_FILTER,
   useAdoptionTimeseries,
@@ -61,28 +65,10 @@ export function useTimeseriesRange(
   deploymentId: string,
   filterState: BinaryVersionFilterState = NO_BINARY_VERSION_FILTER,
 ) {
-  const queryClient = useQueryClient();
   const [rangeDays, setRangeDays] = useState(DEFAULT_TIMESERIES_RANGE_DAYS);
   const timeseriesQuery = useAdoptionTimeseries(deploymentId, filterState, {
     rangeDays,
   });
-  const binaryVersion = filterState.filter;
-
-  useEffect(() => {
-    if (!timeseriesQuery.isSuccess) {
-      return;
-    }
-    for (const option of TIMESERIES_RANGE_OPTIONS) {
-      if (option.days !== rangeDays) {
-        void prefetchDeploymentTimeseries(
-          queryClient,
-          deploymentId,
-          option.days,
-          binaryVersion,
-        );
-      }
-    }
-  }, [binaryVersion, deploymentId, queryClient, rangeDays, timeseriesQuery.isSuccess]);
 
   return {
     rangeDays,

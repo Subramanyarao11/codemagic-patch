@@ -18,12 +18,29 @@ All maintenance commands run against the `codemagic-patch-selfhost` Compose proj
 
 ## Status and logs
 
+The self-host stack is split across Compose files. `docker-compose.selfhost.yml` defines only Caddy and the server; the database and storage each come from an overlay file in `deploy/selfhost/`, chosen at install time by settings in `.env.selfhost`. The `cmpatch selfhost` commands add the right overlays for you. When you run `docker compose` yourself, add the same files with `-f` after the base file, in this order:
+
+| Setting in `.env.selfhost` | File to add |
+| --- | --- |
+| `SELFHOST_DATABASE_MODE=bundled` (or unset) | `deploy/selfhost/compose.bundled-db.yml` |
+| `SELFHOST_DATABASE_MODE=external` | `deploy/selfhost/compose.external-db.yml` |
+| `SELFHOST_STORAGE_MODE=bundled` (or unset) | `deploy/selfhost/compose.bundled-storage.yml` |
+| `SELFHOST_STORAGE_ORIGIN_MODE=cdn-origin`, with bundled storage | `deploy/selfhost/compose.bundled-storage-cdn-origin.yml` |
+| `SELFHOST_STORAGE_MODE=s3` | `deploy/selfhost/compose.external-storage-s3.yml` |
+| `SELFHOST_STORAGE_MODE=gcs` | `deploy/selfhost/compose.external-storage-gcs.yml` |
+| `SELFHOST_SCHEME=http` | `deploy/selfhost/compose.http.yml` |
+| `docker-compose.selfhost.override.yml` exists | that file, last |
+
+Without the overlays, Compose sees no database or storage: `ps` lists only Caddy and the server, and `up -d` starts a server that crash-loops without a database. The commands below are for the default install (bundled database and storage).
+
 ```bash
 docker compose --project-name codemagic-patch-selfhost --env-file .env.selfhost \
-  -f docker-compose.selfhost.yml ps
+  -f docker-compose.selfhost.yml -f deploy/selfhost/compose.bundled-db.yml \
+  -f deploy/selfhost/compose.bundled-storage.yml ps
 
 docker compose --project-name codemagic-patch-selfhost --env-file .env.selfhost \
-  -f docker-compose.selfhost.yml logs -f server
+  -f docker-compose.selfhost.yml -f deploy/selfhost/compose.bundled-db.yml \
+  -f deploy/selfhost/compose.bundled-storage.yml logs -f server
 ```
 
 ## Backup

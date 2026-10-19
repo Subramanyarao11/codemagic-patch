@@ -203,7 +203,6 @@ export interface MetricEventRow {
   running_package_hash: string | null;
   target_package_hash: string | null;
   device_id: string;
-  sdk_version: string | null;
   platform: string | null;
   attributes: Record<string, unknown> | null;
   failure_payload: Record<string, unknown> | null;
@@ -458,7 +457,6 @@ export function mapMetricEventRow(row: MetricEventRow): MetricEvent {
     id: row.id,
     platform: row.platform,
     runningPackageHash: row.running_package_hash,
-    sdkVersion: row.sdk_version,
     targetPackageHash: row.target_package_hash,
     teamId: asBrand(row.team_id),
   };

@@ -90,7 +90,7 @@ The SDK is configured by three native values, already baked into the app:
 | `CodemagicPatchDownloadBaseUrl` | `http://localhost:9100/codemagic-patch` | `http://localhost:9100/codemagic-patch` |
 | `CodemagicPatchDeploymentKey` | `dev_local_ios_deployment_key` | `dev_local_android_deployment_key` |
 
-The matching `demo-app-ios` / `demo-app-android` apps, each with a `staging` deployment, are created by the evaluation stack's [seed data](../local-dev/seed.sql). This mirrors the recommended production setup: one app per platform, so iOS and Android never share a deployment (see the [top-level README](../../README.md)). The React Native codebase itself stays a single cross-platform project — only the server-side apps are split.
+The matching `demo-app-ios` / `demo-app-android` apps, each with a `staging` deployment, are created by the evaluation stack's [seed data](../local-dev/seed.sql). This mirrors the recommended production setup: one app per platform, so iOS and Android never share a deployment (see [Create apps and deployments](https://patch.codemagic.io/docs/setup/native-setup#create-apps-and-deployments)). The React Native codebase itself stays a single cross-platform project — only the server-side apps are split.
 
 ## Troubleshooting
 

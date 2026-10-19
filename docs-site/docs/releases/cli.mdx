@@ -20,6 +20,74 @@ npm install -g @codemagic/patch-cli@latest
 Reference: [CLI reference](/docs/reference/cli-reference) ·
 [GitHub releases](https://github.com/codemagic-ci-cd/codemagic-patch/releases?q=patch-cli)
 
+## 0.7.0 {#v0-7-0}
+
+*19th October 2026*
+
+### Breaking
+
+`cmpatch member remove`, `member update`, `member invite-revoke`, and
+`token revoke` now show what they change and ask before they change anyone's
+access, as `app remove` does. Without a terminal (in CI, with
+`--non-interactive`, or with `--format json`) they exit `2` instead of running.
+Add `--yes` to scripts that call them.
+
+### Dashboard parity: server, teams, app transfer
+
+- **`cmpatch server status`:** Prints the server's own view of its database,
+  storage, disk, download URL, and version, the same checks as the
+  dashboard's Status page. `cmpatch doctor` checks from your machine instead.
+- **`cmpatch team list` and `cmpatch team show`:** List the teams you can
+  see and show one team's details, so you can find the name or ID to pass as
+  `--team` or store with `cmpatch config set team`.
+- **`cmpatch app transfer`:** Moves an app and its deployments to another
+  team, picked with `--dest-team` / `--dest-team-id` or from a list of your
+  other teams, and confirms unless `--yes`. Capacitor apps move the same way:
+  pass the ID that `cmpatch-capacitor app list` shows as `--app-id`.
+
+### Metrics from the CLI
+
+`cmpatch help metrics` lists these commands alongside `deployment metrics`,
+`deployment history`, and `release metrics`.
+
+- **`cmpatch deployment timeseries`:** Prints a deployment's counters per
+  day, the numbers behind the dashboard's deployment chart. Pick the window
+  with `--range 7d|30d|90d|1y` or `--from` / `--to`, narrow it with
+  `--binary-version` / `--binary-version-prefix`, and use `--format json` for
+  the per-release series.
+- **`cmpatch deployment failures` / `failure-events` and `cmpatch release
+  failures` / `failure-events`:** Drill into a failure reason from
+  `deployment metrics` or `release metrics`, as the dashboard's failure dialog
+  does. `failures --reason <reason>` lists the codes under it; adding
+  `--code <code>`, or `--no-code` for the failures that reported none, shows
+  that code's top exit reasons and messages. `failure-events` lists the single
+  events of one code, a page at a time with `--limit` and `--cursor`.
+- **`cmpatch release list --binary-version`:** Lists only the releases that
+  target one binary version (`--binary-version 1.2.3`) or every version under
+  a prefix (`--binary-version-prefix 1.2`), like the binary version filter on
+  the dashboard's deployment page.
+
+### Smaller changes
+
+- **`cmpatch app setting` without a flag shows the current settings:** Run
+  without `--require-code-signing` to see whether the app requires code
+  signing, instead of failing on a missing flag or asking for a value. Pass
+  `--require-code-signing=<true|false>` to change it, as before.
+- **`cmpatch release promote`:** Without `--label`, a terminal run lets you
+  pick the release from the source deployment's list, newest first with its
+  status and target binary version, instead of typing a label. Help no longer
+  claims `--rollout-percentage` and `--disabled` default to the source
+  release; they default to 100 and off.
+- **`cmpatch token revoke --name <name>`:** Revoke a token by the name you
+  gave it at creation, instead of looking up its ID. A name shared by several
+  tokens is refused with their IDs, so you can pass `--token-id`.
+- **`cmpatch release inspect --logs` removed:** The hidden flag only ever
+  reported that no log API exists; it now fails as an unknown flag. For
+  failure detail, use `deployment failures` / `failure-events`.
+
+See the [CLI reference](/docs/reference/cli-reference) and
+[CLI release](https://github.com/codemagic-ci-cd/codemagic-patch/releases/tag/%40codemagic/patch-cli%400.7.0).
+
 ## 0.6.0 {#v0-6-0}
 
 *6th October 2026*

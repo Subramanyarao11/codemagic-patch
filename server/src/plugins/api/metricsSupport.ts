@@ -186,11 +186,6 @@ export function parseMetricEventInput(body: unknown):
     return metricOptionalStringProblem("target_package_hash");
   }
 
-  const sdkVersion = parseOptionalStringField(body.sdk_version);
-  if (sdkVersion.kind === "error") {
-    return metricOptionalStringProblem("sdk_version");
-  }
-
   const platform = parseOptionalStringField(body.platform);
   if (platform.kind === "error") {
     return metricOptionalStringProblem("platform");
@@ -210,7 +205,6 @@ export function parseMetricEventInput(body: unknown):
       id: createMetricEventId(),
       platform: platform.value,
       runningPackageHash: runningPackageHash.value,
-      sdkVersion: sdkVersion.value,
       targetPackageHash: targetPackageHash.value,
     },
   };

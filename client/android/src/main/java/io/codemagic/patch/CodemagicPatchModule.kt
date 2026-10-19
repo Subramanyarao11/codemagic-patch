@@ -47,7 +47,7 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
 
   init {
     reactContext.addLifecycleEventListener(this)
-    CodemagicPatchExecutors.network.execute { flushMetricEvents() }
+    CodemagicPatchExecutors.metrics.execute { flushMetricEvents() }
   }
 
   @ReactMethod
@@ -446,7 +446,7 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
   }
 
   override fun onHostResume() {
-    CodemagicPatchExecutors.network.execute { flushMetricEvents() }
+    CodemagicPatchExecutors.metrics.execute { flushMetricEvents() }
   }
 
   override fun onHostPause() = Unit
@@ -510,14 +510,12 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
 
   private fun commitMetricEvent(eventJson: String) {
     try {
-      synchronized(CodemagicPatchExecutors.metricsLock) {
-        val event = JSONObject(eventJson)
-        val eventId = event.optString("event_id", System.nanoTime().toString())
-        require(isSafeEventId(eventId)) { "unsafe metric event_id" }
-        storage.writeJson("events/$eventId.json", event)
-        applyMetricMetadataSideEffect(event)
-        storage.enforceEventQueueCap()
-      }
+      val event = JSONObject(eventJson)
+      val eventId = event.optString("event_id", System.nanoTime().toString())
+      require(isSafeEventId(eventId)) { "unsafe metric event_id" }
+      storage.writeJson("events/$eventId.json", event)
+      applyMetricMetadataSideEffect(event)
+      storage.enforceEventQueueCap()
     } catch (_: Exception) {}
   }
 
@@ -595,13 +593,17 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Runs on the metrics executor while io-executor work keeps writing to the
+   * same queue. No lock is needed: see the queue invariants in the metrics
+   * Spec §Thread Safety.
+   *
+   * Never take a lock that io work also takes for the duration of the
+   * request. The static boot path waits on the io executor from the main
+   * thread, so a stalled upload holding such a lock surfaced as an ANR in
+   * `getJSBundleFile()`.
+   */
   private fun flushMetricEvents() {
-    synchronized(CodemagicPatchExecutors.metricsLock) {
-      flushMetricEventsLocked()
-    }
-  }
-
-  private fun flushMetricEventsLocked() {
     if (isMetricFlushDeferred()) return
 
     val apiUrl = config("CodemagicPatchApiUrl").trimEnd('/')
@@ -702,7 +704,7 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
       jitteredMs
     }
 
-    CodemagicPatchExecutors.network.schedule({
+    CodemagicPatchExecutors.metrics.schedule({
       synchronized(metricsRetryLock) {
         metricsRetryScheduled = false
       }
@@ -712,9 +714,7 @@ class CodemagicPatchModule(private val reactContext: ReactApplicationContext) :
 
   private fun readCommittedMetricEvents(): List<Pair<File, JSONObject>> {
     val cutoffMs = System.currentTimeMillis() - 7L * 24L * 60L * 60L * 1000L
-    return storage.listFiles("events")
-      .filter { it.name.endsWith(".json") }
-      .sortedBy { it.lastModified() }
+    return storage.committedEventFiles()
       .mapNotNull { file ->
         try {
           if (file.lastModified() < cutoffMs) {

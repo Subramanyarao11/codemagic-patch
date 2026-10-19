@@ -42,6 +42,7 @@ import {
   exitCodeForProblemDetails,
   getProblemTypeSuffix,
   HttpProblemError,
+  ServerFeatureUnavailableError,
 } from "./problem-details";
 import {
   colorizeTable,
@@ -306,7 +307,7 @@ export async function runCli(
             throw error;
           }
 
-          deps.stderr.write(renderProblemDetails(error.problem, err));
+          deps.stderr.write(renderHttpProblem(error, err));
           const offer = await offerInteractiveLogin(
             argv,
             null,
@@ -469,7 +470,7 @@ export async function runCli(
           writeJson(deps.stdout, { error: error.problem });
           return exitCodeForProblemDetails(error.problem, error.responseStatus);
         }
-        deps.stderr.write(renderProblemDetails(error.problem, err));
+        deps.stderr.write(renderHttpProblem(error, err));
 
         // Nothing ran, and the CLI already knows which server refused and how to
         // sign in to it — so offer, rather than printing the command to retype.
@@ -539,7 +540,7 @@ function reportCommandFailure(
   }
 
   if (error instanceof HttpProblemError) {
-    deps.stderr.write(renderProblemDetails(error.problem, palette));
+    deps.stderr.write(renderHttpProblem(error, palette));
     return reportHttpProblemOutcome(error, deps, palette, command);
   }
 
@@ -548,6 +549,17 @@ function reportCommandFailure(
     palette.err(error instanceof Error ? error.message : String(error)),
   );
   return 1;
+}
+
+/**
+ * A server problem as a person reads it. A feature the server does not offer
+ * is one sentence the command wrote for it; anything else is the server's
+ * problem record, with its hint.
+ */
+function renderHttpProblem(error: HttpProblemError, palette: Palette): string {
+  return error instanceof ServerFeatureUnavailableError
+    ? `${palette.err(error.message)}\n`
+    : renderProblemDetails(error.problem, palette);
 }
 
 /**
@@ -890,15 +902,20 @@ function getCommandResultExitCode(result: unknown): number | null {
 // `nonInteractive?: true` without an entry here is a compile error.
 const JSON_NON_INTERACTIVE_KINDS = {
   "app-remove": true,
+  "app-transfer": true,
   "deployment-clear": true,
   "deployment-remove": true,
   login: true,
+  "member-invite-revoke": true,
+  "member-remove": true,
+  "member-update": true,
   wire: true,
   "release-create": true,
   "release-patch": true,
   "release-promote": true,
   "release-react": true,
   "release-rollback": true,
+  "token-revoke": true,
 } satisfies Record<
   Extract<CliCommand, { nonInteractive?: true }>["kind"],
   true

@@ -1,16 +1,19 @@
 # Codemagic Patch Documentation
 
 Guides for running, operating, and integrating Codemagic Patch. New here? Start with
-the [root README](../README.md) — product overview, quickstart, and end-to-end setup.
+the [root README](../README.md) for the product overview and the local quickstart; the
+end-to-end setup lives on the [documentation site](https://patch.codemagic.io/docs/).
 
 - [Migrate from CodePush](migrate-from-codepush.md) — swap `react-native-code-push`
   for `@codemagic/react-native-patch` and map your CLI workflow to `cmpatch`.
 - [Migrate from Appflow Live Updates](migrate-from-appflow.md) — swap
   `@capacitor/live-updates` for `@codemagic/capacitor-patch` and map
   Appflow channels and dashboard actions to deployments and the `cmpatch-capacitor` CLI.
-- [Self-hosting with Docker Compose](self-hosting-compose.md) — the supported
-  production deployment path: one Docker host, bundled PostgreSQL and MinIO, Caddy
-  for HTTPS.
+- [Self-hosting with Docker Compose](self-hosting-compose.md) — the on-server
+  reference for the self-host stack (one Docker host, Caddy for HTTPS, bundled or
+  external PostgreSQL and storage): the installer scripts, their flags, and setups
+  the `cmpatch selfhost install` wizard does not cover. For a guided install, start
+  with the [Install guide](https://patch.codemagic.io/docs/install).
 - [Custom deployment](custom-deployment.md) — reference for operators bringing their
   own platform (not a supported path in the initial open-source release).
 - [UI-managed releases](ui-managed-releases.md) — build a `.cmpatch` artifact and

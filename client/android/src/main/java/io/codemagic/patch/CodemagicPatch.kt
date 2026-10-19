@@ -183,22 +183,19 @@ object CodemagicPatch {
     attributes: JSONObject
   ) {
     try {
-      synchronized(CodemagicPatchExecutors.metricsLock) {
-        val eventId = CodemagicPatchUtil.crashRollbackEventId(deviceId, packageHash, emittedAt)
-        storage.writeJson("events/$eventId.json", JSONObject()
-          .put("event_id", eventId)
-          .put("event_name", "Failed")
-          .put("emitted_at", emittedAt)
-          .put("device_id", deviceId)
-          .put("deployment_key", deploymentKey)
-          .put("binary_version", binaryVersion)
-          .put("running_package_hash", JSONObject.NULL)
-          .put("target_package_hash", packageHash)
-          .put("platform", "android")
-          .put("sdk_version", "0.0.0")
-          .put("attributes", attributes))
-        storage.enforceEventQueueCap()
-      }
+      val eventId = CodemagicPatchUtil.crashRollbackEventId(deviceId, packageHash, emittedAt)
+      storage.writeJson("events/$eventId.json", JSONObject()
+        .put("event_id", eventId)
+        .put("event_name", "Failed")
+        .put("emitted_at", emittedAt)
+        .put("device_id", deviceId)
+        .put("deployment_key", deploymentKey)
+        .put("binary_version", binaryVersion)
+        .put("running_package_hash", JSONObject.NULL)
+        .put("target_package_hash", packageHash)
+        .put("platform", "android")
+        .put("attributes", attributes))
+      storage.enforceEventQueueCap()
     } catch (_: Exception) {}
   }
 

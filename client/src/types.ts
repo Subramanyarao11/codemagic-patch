@@ -218,7 +218,6 @@ export interface EventEnvelope {
   running_package_hash: string | null;
   target_package_hash: string | null;
   platform: string;
-  sdk_version: string;
   attributes: Record<string, string>;
 }
 

@@ -188,11 +188,23 @@ internal class CodemagicPatchStorage(
             metadata.optString("binary_version") == binaryVersion
     }
 
+    /**
+     * Committed event files, oldest first.
+     *
+     * The plugin-call thread writes and evicts events while the metrics executor flushes
+     * and deletes them, so a listed file can vanish mid-sort. Each mtime is read once: a
+     * key that changes between comparisons (a deleted file reports 0) breaks TimSort's
+     * contract and throws.
+     */
+    fun committedEventFiles(): List<File> =
+        listFiles("events")
+            .filter { it.name.endsWith(".json") }
+            .map { it to it.lastModified() }
+            .sortedBy { it.second }
+            .map { it.first }
+
     fun enforceEventQueueCap(maxEvents: Int = 100) {
-        val committed =
-            listFiles("events")
-                .filter { it.name.endsWith(".json") }
-                .sortedBy { it.lastModified() }
+        val committed = committedEventFiles()
         val overflow = committed.size - maxEvents
         if (overflow > 0) {
             committed.take(overflow).forEach { it.delete() }

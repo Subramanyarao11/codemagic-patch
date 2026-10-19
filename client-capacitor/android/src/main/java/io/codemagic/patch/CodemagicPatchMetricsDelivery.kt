@@ -23,11 +23,11 @@ internal enum class BatchOutcome { ACKNOWLEDGE, DROP, RETRY }
 
 /**
  * Batches and delivers the metrics WAL to `POST {apiUrl}/v1/metrics/events`
- * (client/specs/metrics/Spec.md § Delivery Strategy). Enqueue and flush both run through
- * [lock], so a flush triggered by [android.app.Activity] resume can never tear a write
- * triggered by a concurrent plugin call — the two arrive on different threads (Capacitor's
- * own plugin-call dispatch thread vs. this class's own executor), unlike every other native
- * method in this project, which Capacitor's own single dispatch thread already serializes.
+ * (client/specs/metrics/Spec.md § Delivery Strategy). [enqueue] runs on Capacitor's
+ * plugin-call thread and the flush on this class's own executor, with no lock between
+ * them: the queue is safe to interleave for the reasons in client/specs/metrics/Spec.md §
+ * Thread Safety. A lock held across the upload would let one stalled request block
+ * [enqueue], and with it the plugin-call thread that every plugin in the app shares.
  */
 internal class CodemagicPatchMetricsDelivery(
     private val queue: CodemagicPatchMetricsQueue,
@@ -43,9 +43,8 @@ internal class CodemagicPatchMetricsDelivery(
         const val BASE_RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 60_000L
 
-        // A dedicated single-thread executor, not a pool: "serialize all metrics queue
-        // operations on the native I/O executor" (client/specs/sdk-native/Spec.md §
-        // Thread Safety) — a pool would let a delayed retry race a fresh flush.
+        // A dedicated single-thread executor, not a pool: a pool would let a delayed
+        // retry race a fresh flush, and the retry state below is only ever touched here.
         val executor: ScheduledExecutorService =
             Executors.newSingleThreadScheduledExecutor { runnable ->
                 Thread(runnable, "CodemagicPatchMetrics").apply { isDaemon = true }
@@ -66,7 +65,6 @@ internal class CodemagicPatchMetricsDelivery(
             }
     }
 
-    private val lock = Any()
     private var retryAttempt = 0
     private var retryScheduled = false
     private var backoffUntilMs = 0L
@@ -78,7 +76,7 @@ internal class CodemagicPatchMetricsDelivery(
      * completed, per client/specs/metrics/Spec.md § Native Queue Bridge Contract.
      */
     fun enqueue(eventJson: String) {
-        synchronized(lock) { queue.enqueue(eventJson) }
+        queue.enqueue(eventJson)
     }
 
     /**
@@ -90,22 +88,20 @@ internal class CodemagicPatchMetricsDelivery(
      */
     fun flushAsync(apiUrl: String) {
         if (apiUrl.isBlank()) return
-        executor.execute { flushLocked(apiUrl.trimEnd('/')) }
+        executor.execute { flush(apiUrl.trimEnd('/')) }
     }
 
-    private fun flushLocked(apiUrl: String) {
-        synchronized(lock) {
-            if (isRetryDeferred()) return
-            // Clear it here, under the lock, whether this call is a fresh foreground-entry
-            // flush (where it's already false) or the scheduled retry's own invocation
-            // (where this is the "the wait is over" transition) — see scheduleRetry.
-            retryScheduled = false
-            var events = queue.listPendingForFlush()
-            while (events.isNotEmpty()) {
-                val batch = events.take(BATCH_LIMIT)
-                if (!sendBatch(apiUrl, batch)) return
-                events = events.drop(batch.size)
-            }
+    private fun flush(apiUrl: String) {
+        if (isRetryDeferred()) return
+        // Clear it here, on the executor, whether this call is a fresh foreground-entry
+        // flush (where it's already false) or the scheduled retry's own invocation
+        // (where this is the "the wait is over" transition) — see scheduleRetry.
+        retryScheduled = false
+        var events = queue.listPendingForFlush()
+        while (events.isNotEmpty()) {
+            val batch = events.take(BATCH_LIMIT)
+            if (!sendBatch(apiUrl, batch)) return
+            events = events.drop(batch.size)
         }
     }
 
@@ -208,6 +204,6 @@ internal class CodemagicPatchMetricsDelivery(
         retryScheduled = true
         backoffUntilMs = System.currentTimeMillis() + jitteredMs
 
-        executor.schedule({ flushLocked(apiUrl) }, jitteredMs, TimeUnit.MILLISECONDS)
+        executor.schedule({ flush(apiUrl) }, jitteredMs, TimeUnit.MILLISECONDS)
     }
 }

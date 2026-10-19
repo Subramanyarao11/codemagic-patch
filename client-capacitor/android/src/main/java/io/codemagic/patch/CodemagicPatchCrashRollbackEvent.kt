@@ -58,11 +58,6 @@ internal object CodemagicPatchCrashRollbackEvent {
                     "running_package_hash" to null,
                     "target_package_hash" to packageHash,
                     "platform" to "capacitor",
-                    // Keep in sync with package.json's "version" — same constant as
-                    // src/protocol/events.ts's SDK_VERSION, enforced there by
-                    // src/protocol/events.test.ts. Native has no runtime access to
-                    // package.json (see that file's comment on why not to read it live).
-                    "sdk_version" to "0.1.0",
                     "attributes" to attributes,
                 ),
             )

@@ -25,10 +25,10 @@ internal data class CodemagicPatchMetricEvent(
  * "tolerate future reason codes" (specs/IMPLEMENTATION-PLAN.md Phase 5) true by
  * construction rather than by an allowlist check.
  *
- * All operations are called from within a single caller-held lock
- * (`CodemagicPatchMetricsDelivery.lock`) — this class itself performs no synchronization,
- * matching upstream's actual `synchronized(CodemagicPatchExecutors.metricsLock)` shape
- * (client/specs/sdk-native/Spec.md § Thread Safety).
+ * Called from two threads without a lock: [enqueue] on Capacitor's plugin-call thread,
+ * [listPendingForFlush] and [remove] on the metrics executor. This class performs no
+ * synchronization; client/specs/metrics/Spec.md § Thread Safety lists the properties that
+ * make the interleaving safe.
  */
 internal class CodemagicPatchMetricsQueue(
     private val storage: CodemagicPatchStorage,
@@ -66,9 +66,7 @@ internal class CodemagicPatchMetricsQueue(
     fun listPendingForFlush(): List<CodemagicPatchMetricEvent> {
         val cutoffMs = System.currentTimeMillis() - RETENTION_MILLIS
         return storage
-            .listFiles("events")
-            .filter { it.name.endsWith(".json") }
-            .sortedBy { it.lastModified() }
+            .committedEventFiles()
             .mapNotNull { file ->
                 if (file.lastModified() < cutoffMs) {
                     file.delete()

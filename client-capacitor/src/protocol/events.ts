@@ -5,24 +5,11 @@
 //    `CodemagicPatch.enqueueMetricEvent({ eventJson: json })` (this package's
 //    object-wrapped native contract, ../nativeCodemagicPatch).
 // 2. `platform: "react-native"` -> `platform: "capacitor"`.
-// 3. `require("../package.json")` -> a hardcoded constant, checked against
-//    package.json by a test rather than read from it at runtime — a real `require()`
-//    survives rootDir-constrained emit (tsc) and Node/vitest, but has no meaning in any
-//    of the shipped browser bundles (dist/plugin.js's IIFE, or dist/esm/index.js loaded
-//    by a consuming app's own bundler): both hit `ReferenceError: require is not
-//    defined` the moment this file's top level ran. Only dist/plugin.cjs.js's literal
-//    CommonJS `require` calls happened to work — undetected until Phase 4's example app
-//    actually loaded the compiled output in a real WebView. See
-//    src/protocol/events.test.ts's version-sync test for what keeps this from drifting.
 
 import CodemagicPatch from '../nativeCodemagicPatch';
 
 import { nowIso, nowMs, state } from './runtime';
 import type { MetricsEvent, RuntimePackage } from './types';
-
-// Keep in sync with package.json's "version" — enforced by
-// src/protocol/events.test.ts, not read from it at runtime (see the comment above).
-const SDK_VERSION = '0.1.0';
 
 const ACTIVE_DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -59,7 +46,6 @@ function serializeMetricEvent(event: MetricsEvent): string {
     running_package_hash: runningPackageHash,
     target_package_hash: event.packageHash ?? null,
     platform: 'capacitor',
-    sdk_version: SDK_VERSION,
     attributes,
   });
 }

@@ -24,6 +24,7 @@ It is the only command-line tool a Capacitor team needs for this.
 | `release create` | [Publish](#publish-a-release) built web assets. A bare `release` means the same |
 | `release list \| show \| inspect \| metrics` | [Look at releases](#operate-releases) and at how they are being adopted |
 | `release patch \| disable \| enable \| promote \| rollback` | [Change what devices receive](#operate-releases) |
+| `doctor` | [Diagnose](#diagnose-a-setup) why an app may not receive updates |
 
 `cmpatch-capacitor --help` lists them, and `cmpatch-capacitor <command> --help` documents
 every flag of one. The help is generated from the same definitions the parser uses, so it
@@ -45,7 +46,8 @@ install and maintain a Patch server. There is no project config file either — 
 deployment is always named by flags, and the server by a flag, an environment variable or
 [this machine's default server](#from-nothing-to-a-published-update); nothing is asked
 interactively except the [confirmation](#confirmation) before a change; and the output is
-`text` unless you pass `--format json`, whether or not it is piped.
+`text` on a terminal and JSON when stdout is piped, unless `--format` says otherwise — as
+with `cmpatch`.
 
 ## Requirements
 
@@ -227,6 +229,31 @@ cmpatch-capacitor release show --app MyApp-iOS --deployment Production --label v
   deployment's: active, downloaded, ready (installed, waiting to take effect), applied
   (running and reported healthy), failed.
 
+## Diagnose a setup
+
+```sh
+cmpatch-capacitor doctor
+cmpatch-capacitor doctor --platform android --verbose
+cmpatch-capacitor doctor --platform android --verify-delivery
+```
+
+Run it from the app's root (or pass `--project-root`). Without changing anything, it
+checks what the app's updates depend on:
+
+- **The app's project:** its Patch settings in `capacitor.config` and any native
+  overrides, the plugin's registration, separate iOS and Android deployment keys, the
+  `start()` call in the web sources, and a built `webDir`.
+- **The server:** your sign-in, and the app and deployment the app's deployment key
+  belongs to, compared with the app's settings. The download origin is probed.
+- **What is published**, with `--verify-delivery`: the manifest and artifacts for the
+  app's exact version.
+
+It exits 1 when a check fails. Every platform the app is set up for is checked unless
+`--platform` picks one. If doctor cannot tell which deployment the app uses, pass
+`--platform` with `--app` and `--deployment`. `--verbose` shows every check. See
+[Troubleshooting](https://patch.codemagic.io/docs/troubleshooting) for what to do about
+a finding.
+
 ## The binary version is the compatibility boundary
 
 A web bundle calls into native code: Capacitor plugins, your own native classes, the
@@ -317,8 +344,12 @@ cmpatch-capacitor release inspect --release-id "$(jq -r .release.id release.json
 Uploads, promotions and rollbacks carry an idempotency key and are retried on transient
 failures, so a flaky network does not create a release twice.
 
-`--format json` prints the server's response as it came; the default, `text`, is tables
-and labelled fields for people. A few commands have no server response to pass on and
+`--format json` prints the server's response as it came, and `text` is tables and
+labelled fields for people. Without `--format`, a result is `text` on a terminal and JSON
+when stdout is piped or redirected — `$(cmpatch-capacitor …)` or `> release.json` get
+JSON either way. Only the printed result follows that default: progress still goes to
+stderr, and a [confirmation](#confirmation) is still asked when you are at the terminal.
+Only an explicit `--format json` never asks. A few commands have no server response to pass on and
 print a small object of their own: `release create --dry-run` (its report),
 `release inspect` (the server's `release` and `job`, plus `inspection: { status,
 terminal }`), the removals and `token revoke` (`{ "deleted": true, … }`), and a
@@ -331,7 +362,7 @@ is part of the result: the last lines of the text output, `warnings` in the JSON
 | Code | Meaning |
 | --- | --- |
 | 0 | Success |
-| 1 | Server or runtime error (not found, duplicate release, network failure, …), or the confirmation was declined |
+| 1 | Server or runtime error (not found, duplicate release, network failure, …), the confirmation was declined, or a `doctor` check failed |
 | 2 | Usage error, a missing `--yes`, not signed in, or a token given by `--token` or the environment that the server rejects |
 | 3 | Validation error; a release that failed processing or did not finish within `inspect --wait`'s timeout; a stored sign-in that expired or was revoked (sign in again), or a credential store that cannot be read; a browser sign-in that was denied or timed out |
 | 4 | Account disabled |

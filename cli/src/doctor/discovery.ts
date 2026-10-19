@@ -10,6 +10,7 @@ import type { DoctorCommand } from "../commandTypes";
 import type { ProjectConfig } from "../configStore";
 import { isRecord } from "../output";
 import { findIosRoot } from "../nativeProjectPaths";
+import { isServerCredential } from "./credentials";
 import { discoverIosTargets } from "./iosTargets";
 import { inspectJsGraph } from "./jsDiscovery";
 
@@ -214,7 +215,8 @@ function settings(doc: Parsed, native: boolean): SdkSettings {
           reason = "build_time_value";
         } else if (name === "deploymentKey") {
           if (
-            /^cm_pat_|^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$|BEGIN .*PRIVATE KEY/.test(
+            isServerCredential(value) ||
+            /^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$|BEGIN .*PRIVATE KEY/.test(
               value.trim(),
             )
           ) {

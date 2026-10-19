@@ -2,6 +2,7 @@ import { teamAppsPath } from "../appFramework";
 import { prepareDoctorFix, applyDoctorFix, type DoctorFix } from "../doctor/fixes";
 import { canPromptOnStderr } from "./shared";
 import { doctorBlockers } from "../doctor/report";
+import { isServerCredential, SERVER_CREDENTIAL_PATTERN } from "../doctor/credentials";
 import { verifyDoctorDelivery, type PublicationCache } from "../doctor/deliveryVerification";
 import { basename, resolve } from "node:path";
 
@@ -231,10 +232,8 @@ export async function executeDoctor(
 function sanitizeDoctorOutput<T>(value: T): T {
   if (typeof value === "string")
     return redactUrlText(value)
-      .replace(
-        /cm_pat_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
-        "<redacted>",
-      ) as T;
+      .replace(SERVER_CREDENTIAL_PATTERN, "<redacted>")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "<redacted>") as T;
   if (Array.isArray(value)) return value.map(sanitizeDoctorOutput) as T;
   if (isRecord(value))
     return Object.fromEntries(
@@ -350,16 +349,16 @@ async function runDoctorChecks(
   const plans: Array<PlatformDiscovery | undefined> = platforms.length
     ? platforms
     : [undefined];
+  const reportedPlatforms: Array<NativePlatform | undefined> = [];
   for (const item of plans) {
-    const platform = item?.platform;
-    const suffix = platforms.length > 1 ? `-${platform}` : "";
-    const localState: DoctorExecutionState = { ...state, platform };
+    const suffix = platforms.length > 1 ? `-${item?.platform}` : "";
+    const localState: DoctorExecutionState = { ...state, platform: item?.platform };
     const bound = item?.binding.state === "resolved";
     const selectors = item?.binding;
     const plan: DoctorCommand = item
       ? {
           ...command,
-          platform,
+          platform: item.platform,
           unboundSelectors: item.binding.state === "unresolved" &&
             (!!(command.app || command.appId) && !selectors?.app && !selectors?.appId || !!command.deploymentId && !selectors?.deploymentId),
           app: selectors?.app,
@@ -371,7 +370,7 @@ async function runDoctorChecks(
         }
       : command;
     progress.write(
-      `Checking ${platform ?? "selected"} setup and download connectivity`,
+      `Checking ${item?.platform ?? "selected"} setup and download connectivity`,
     );
     const targetChecks = await runControlPlaneTargetChecks(
       deps,
@@ -400,6 +399,10 @@ async function runDoctorChecks(
             state: localState,
             iosVersionSource: item?.iosVersionSource,
           });
+    // Without a configured platform or --platform, runNativeChecks detects one from the
+    // native directories: the groups, their checks and coverage report what it found.
+    const platform = localState.platform;
+    reportedPlatforms.push(platform);
     const sdkChecks = item
       ? [
           ...item.findings.map(toCheck),
@@ -480,8 +483,8 @@ async function runDoctorChecks(
         checks: nativeChecks,
       },
       {
-        id: `sdk-${platform ?? "unknown"}`,
-        title: `SDK Configuration (${platform ?? "unresolved"})`,
+        id: `sdk-${item?.platform ?? "unknown"}`,
+        title: `SDK Configuration (${item?.platform ?? "unresolved"})`,
         checks: sdkChecks,
       },
       {
@@ -506,8 +509,7 @@ async function runDoctorChecks(
     groups.push(...platformGroups);
   }
   const preliminary = createDoctorResult(groups);
-  for (const item of plans) {
-    const platform = item?.platform;
+  for (const platform of reportedPlatforms) {
     const setup = platform
       ? preliminary.coverage.setup.platforms?.[platform]
       : preliminary.coverage.setup;
@@ -1765,7 +1767,7 @@ function formatAuthFailureIssue(
 function looksLikeCredential(value: string): boolean {
   const trimmed = value.trim();
   return (
-    trimmed.startsWith("cm_pat_") ||
+    isServerCredential(trimmed) ||
     /^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(trimmed) ||
     trimmed.includes("BEGIN PRIVATE KEY")
   );

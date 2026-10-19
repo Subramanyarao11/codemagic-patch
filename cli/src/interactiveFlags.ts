@@ -33,12 +33,14 @@ import {
 } from "./commands/resolveNames";
 import {
   listNamedResources,
+  listReleaseChoices,
   listReleaseLabels,
   promptBundler,
   promptChoice,
   promptName,
   promptPlatform,
   promptResource,
+  promptSelect,
   promptServerUrl,
   promptValue,
   TEAM_ROLES,
@@ -239,14 +241,6 @@ async function askFor(
     );
   }
 
-  if (wanted.has("requireCodeSigning")) {
-    answers.requireCodeSigning = await promptChoice(
-      prompt,
-      "Require code signing?",
-      ["true", "false"],
-    );
-  }
-
   if (wanted.has("sourceDeployment")) {
     answers.sourceDeployment = await promptValue(prompt, "Source deployment");
   }
@@ -285,16 +279,37 @@ async function askFor(
   // The walk above fills `label` only when it also resolved a deployment. When
   // it did not, a deployment the user already identified — by flag or by
   // stored configuration — is still enough to offer a list; otherwise the
-  // label is asked for plainly.
+  // label is asked for plainly. Promote's label names a release in its SOURCE
+  // deployment, so the list comes from there.
   if (wanted.has("label") && answers.label === undefined) {
+    const serverUrl =
+      answers.serverUrl ??
+      current.serverUrl ??
+      readOptionValue(argv, "--server-url");
+    const scope =
+      commandKind === "release-promote" ? "promote-source" : "deployment";
+    const sourceTeam =
+      scope === "promote-source" && serverUrl !== undefined
+        ? await askForPromoteSourceTeam({
+            argv,
+            current: { ...current, ...answers },
+            deps,
+            prompt,
+            serverUrl,
+          })
+        : undefined;
+
+    if (sourceTeam?.answer !== undefined) {
+      answers.team = sourceTeam.answer;
+    }
+
     answers.label = await askForLabel(prompt, {
       argv,
-      current,
+      current: { ...current, ...answers },
       deps,
-      serverUrl:
-        answers.serverUrl ??
-        current.serverUrl ??
-        readOptionValue(argv, "--server-url"),
+      scope,
+      serverUrl,
+      teamId: sourceTeam?.teamId,
     });
   }
 
@@ -344,37 +359,19 @@ async function askForServerResources(
     let teamId = explicitTeamId;
 
     if (teamId === undefined) {
-      const teams = await listNamedResources(
+      const team = await pickTeam({
+        argv,
+        current,
         deps,
+        prompt,
         serverUrl,
-        "/v1/teams",
         token,
-        "teams",
-      );
-
-      if (teams.length === 0) {
-        throw noTeamsAvailableError(serverUrl);
-      }
-
-      // A sole team is taken silently even for mutating commands: the team
-      // only scopes the walk, it is never itself the mutation target.
-      const configuredTeamName = current.team ?? readOptionValue(argv, "--team");
-      const team = await pickResource(prompt, {
-        configuredName: configuredTeamName,
-        inferSoleEntry: true,
-        label: "team",
-        message: "Select team",
-        resources: teams,
+        wantedTeam: wanted.has("team"),
       });
-      teamId = team.id;
+      teamId = team.teamId;
 
-      // Recorded when the parser asked for the team itself — and whenever the
-      // pick corrected the configured value, so the replayed flags carry the
-      // pick and execution resolves the same team without asking again.
-      if (
-        shouldRecordPick(wanted.has("team"), configuredTeamName, team, teams.length)
-      ) {
-        answers.team = team.name;
+      if (team.answer !== undefined) {
+        answers.team = team.answer;
       }
     }
 
@@ -457,10 +454,104 @@ async function askForServerResources(
 }
 
 /**
+ * The team a server-side walk scopes to, from the same list and with the same
+ * rules wherever it is asked: a configured name that matches wins, a sole team
+ * is taken silently even for mutating commands (the team only scopes the walk,
+ * it is never itself the mutation target), and several teams are a question.
+ * `answer` is set when the pick must be written back — when the parser asked
+ * for the team itself, and whenever the pick corrected the configured value —
+ * so the replayed flags carry it and execution resolves the same team without
+ * asking again.
+ */
+async function pickTeam(context: {
+  argv: string[];
+  current: CommandDefaultFlagValues;
+  deps: InteractiveFlagDeps;
+  prompt: PromptFn;
+  serverUrl: string;
+  token: string | undefined;
+  wantedTeam: boolean;
+}): Promise<{ answer?: string; teamId: string }> {
+  const { argv, current, deps, prompt, serverUrl, token, wantedTeam } = context;
+  const teams = await listNamedResources(
+    deps,
+    serverUrl,
+    "/v1/teams",
+    token,
+    "teams",
+  );
+
+  if (teams.length === 0) {
+    throw noTeamsAvailableError(serverUrl);
+  }
+
+  const configuredTeamName = current.team ?? readOptionValue(argv, "--team");
+  const team = await pickResource(prompt, {
+    configuredName: configuredTeamName,
+    inferSoleEntry: true,
+    label: "team",
+    message: "Select team",
+    resources: teams,
+  });
+
+  return shouldRecordPick(wantedTeam, configuredTeamName, team, teams.length)
+    ? { answer: team.name, teamId: team.id }
+    : { teamId: team.id };
+}
+
+/**
+ * Promote's source and destination are both looked up by app name in the team
+ * the parser attaches. Left to the resolver, the label picker would ask for
+ * that team itself and keep only the label, and execution would ask again and
+ * could land in another team. So when the source is named by app and
+ * deployment and no id pins the team, it is picked here, once, the way the
+ * walk picks it (a stored team wins when it matches), and recorded like any
+ * walked pick: the releases listed are the ones execution looks the label up
+ * in, and the `Using:` line replays the team. An explicit `--team` is left to
+ * the resolver: the explicit token wins on the re-parse, so a pick could not
+ * change what runs.
+ */
+async function askForPromoteSourceTeam(context: {
+  argv: string[];
+  current: CommandDefaultFlagValues;
+  deps: InteractiveFlagDeps;
+  prompt: PromptFn;
+  serverUrl: string;
+}): Promise<{ answer?: string; teamId: string } | undefined> {
+  const { argv, current, deps, prompt, serverUrl } = context;
+  const scopedElsewhere =
+    readOptionValue(argv, "--source-deployment-id") !== undefined ||
+    (readOptionValue(argv, "--app-id") ?? current.appId) !== undefined ||
+    (readOptionValue(argv, "--team-id") ?? current.teamId) !== undefined ||
+    readOptionValue(argv, "--team") !== undefined;
+  const nameScoped =
+    (readOptionValue(argv, "--app") ?? current.app) !== undefined &&
+    (readOptionValue(argv, "--source-deployment") ?? current.sourceDeployment) !==
+      undefined;
+
+  if (scopedElsewhere || !nameScoped) {
+    return undefined;
+  }
+
+  return pickTeam({
+    argv,
+    current,
+    deps,
+    prompt,
+    serverUrl,
+    token: readOptionValue(argv, "--token"),
+    wantedTeam: false,
+  });
+}
+
+/**
  * A release label, from a list where one is reachable and typed where it is
- * not. Promote scopes its source with its own flag, so the walk that produces a
- * deployment never runs there — a typed label is worse than a picked one and
- * far better than a usage error.
+ * not — a typed label is worse than a picked one and far better than a usage
+ * error. Promote scopes its source with its own flags, so the walk that
+ * produces a deployment never runs there; its list is resolved from those
+ * flags instead, and its entries show status and target binary version, since
+ * promoting a disabled release or one built for another binary is the mistake
+ * the list is there to prevent.
  */
 async function askForLabel(
   prompt: PromptFn,
@@ -468,26 +559,34 @@ async function askForLabel(
     argv: string[];
     current: CommandDefaultFlagValues;
     deps: InteractiveFlagDeps;
+    scope: "deployment" | "promote-source";
     serverUrl: string | undefined;
+    /** The team `askForPromoteSourceTeam` picked, when it had to pick one. */
+    teamId?: string;
   },
 ): Promise<string> {
-  const { argv, current, deps, serverUrl } = context;
+  const { argv, current, deps, scope, serverUrl, teamId } = context;
 
   if (serverUrl === undefined) {
     return promptValue(prompt, "Release label");
   }
 
   const token = readOptionValue(argv, "--token");
-  const deploymentId = await resolveLabelDeploymentId(
-    argv,
-    current,
-    deps,
-    serverUrl,
-    token,
-  );
+  const deploymentId =
+    scope === "promote-source"
+      ? await resolvePromoteSourceDeploymentId(argv, current, deps, serverUrl, token, teamId)
+      : await resolveLabelDeploymentId(argv, current, deps, serverUrl, token);
 
   if (deploymentId === undefined) {
     return promptValue(prompt, "Release label");
+  }
+
+  if (scope === "promote-source") {
+    const releases = await listReleaseChoices(deps, serverUrl, deploymentId, token);
+
+    return releases.length === 0
+      ? promptValue(prompt, "Release label")
+      : promptSelect(prompt, "Select release to promote", releases);
   }
 
   const labels = await listReleaseLabels(deps, serverUrl, deploymentId, token);
@@ -495,6 +594,57 @@ async function askForLabel(
   return labels.length === 0
     ? promptValue(prompt, "Release label")
     : promptChoice(prompt, "Select release", labels);
+}
+
+/**
+ * Promote's source deployment, built the way `parseReleasePromote` builds it —
+ * an explicit `--source-deployment-id`, or the app plus `--source-deployment`
+ * (with the team the parser would attach, or the one just picked for it) —
+ * so the releases listed are the ones execution will look the picked label up
+ * in.
+ */
+async function resolvePromoteSourceDeploymentId(
+  argv: string[],
+  current: CommandDefaultFlagValues,
+  deps: InteractiveFlagDeps,
+  serverUrl: string,
+  token: string | undefined,
+  pickedTeamId: string | undefined,
+): Promise<string | undefined> {
+  const explicitDeploymentId = readOptionValue(argv, "--source-deployment-id");
+
+  if (explicitDeploymentId !== undefined) {
+    return explicitDeploymentId;
+  }
+
+  const deploymentName =
+    readOptionValue(argv, "--source-deployment") ?? current.sourceDeployment;
+  const appId = readOptionValue(argv, "--app-id") ?? current.appId;
+  const appName = readOptionValue(argv, "--app") ?? current.app;
+
+  if (deploymentName === undefined) {
+    return undefined;
+  }
+
+  if (appId !== undefined) {
+    return resolveDeploymentId({ appId, deploymentName }, serverUrl, token, deps);
+  }
+
+  if (appName === undefined) {
+    return undefined;
+  }
+
+  const teamId =
+    readOptionValue(argv, "--team-id") ?? current.teamId ?? pickedTeamId;
+  const teamName = readOptionValue(argv, "--team") ?? current.team;
+  const selector: DeploymentSelector =
+    teamId !== undefined
+      ? { appName, deploymentName, teamId }
+      : teamName !== undefined
+        ? { appName, deploymentName, teamName }
+        : { appName, deploymentName };
+
+  return resolveDeploymentId(selector, serverUrl, token, deps);
 }
 
 /**

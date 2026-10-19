@@ -56,6 +56,7 @@ export async function executeReleasePromote(
     fields: [
       ["serverUrl", command.serverUrl],
       ["sourceReleaseId", sourceReleaseId],
+      ["sourceReleaseLabel", command.sourceRelease.releaseLabel],
       ["destinationDeploymentId", destinationDeploymentId],
       ["targetBinaryVersion", command.targetBinaryVersion],
       ["rollout", String(command.rolloutPercentage)],

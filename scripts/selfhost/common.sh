@@ -484,6 +484,11 @@ selfhost_health_status() {
   local container_id
   container_id="$(selfhost_container_id "$service")"
   [ -n "$container_id" ] || return 1
+  selfhost_container_health_status "$container_id"
+}
+
+selfhost_container_health_status() {
+  local container_id="$1"
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id"
 }
 
@@ -497,30 +502,48 @@ require_selfhost_service_running() {
   fi
 }
 
+# An optional container id waits on that exact container instead of resolving
+# the service through compose, whose env file or compose files may have
+# changed since the container was created.
 wait_for_selfhost_service() {
   local service="$1"
   local timeout_seconds="${2:-$SELFHOST_DEFAULT_TIMEOUT_SECONDS}"
+  local container_id="${3:-}"
   local deadline
   local status
   deadline=$((SECONDS + timeout_seconds))
 
   while [ "$SECONDS" -lt "$deadline" ]; do
-    status="$(selfhost_health_status "$service" 2>/dev/null || true)"
+    if [ -n "$container_id" ]; then
+      status="$(selfhost_container_health_status "$container_id" 2>/dev/null || true)"
+    else
+      status="$(selfhost_health_status "$service" 2>/dev/null || true)"
+    fi
     case "$status" in
       healthy|running)
         log_selfhost "${service} is ${status}"
         return 0
         ;;
       unhealthy|exited|dead)
-        compose_selfhost logs --tail=80 "$service" >&2 || true
+        selfhost_service_logs "$service" "$container_id"
         fail_selfhost "${service} is ${status}"
         ;;
     esac
     sleep 3
   done
 
-  compose_selfhost logs --tail=80 "$service" >&2 || true
+  selfhost_service_logs "$service" "$container_id"
   fail_selfhost "timed out waiting for ${service}"
+}
+
+selfhost_service_logs() {
+  local service="$1"
+  local container_id="${2:-}"
+  if [ -n "$container_id" ]; then
+    docker logs --tail=80 "$container_id" >&2 || true
+  else
+    compose_selfhost logs --tail=80 "$service" >&2 || true
+  fi
 }
 
 wait_for_selfhost_http() {

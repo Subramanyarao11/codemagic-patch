@@ -215,6 +215,136 @@ export async function resolveTeamId(
   return resolvedTeam.id;
 }
 
+/** A team as a transfer names it: the name only when a list supplied one. */
+export type TransferTeam = {
+  id: string;
+  name?: string;
+};
+
+/**
+ * Whether the destination of `app transfer` may be picked rather than named.
+ * The same gate as every execution-time picker: deps.prompt is withdrawn for
+ * JSON output, --non-interactive and --yes, and both streams must be a
+ * terminal.
+ */
+export function canPickDestinationTeam(
+  deps: CommandDeps,
+  options: ResolveOptions = {},
+): boolean {
+  return (
+    deps.prompt !== undefined &&
+    canPromptOnStderr(deps, options.nonInteractive === true)
+  );
+}
+
+export function missingDestinationTeamError(serverUrl: string): UsageError {
+  return new UsageError(
+    [
+      "No destination team was selected.",
+      `Context: server ${serverUrl}.`,
+      "Next: pass --dest-team <name> or --dest-team-id <id>; `cmpatch team list` shows the teams you can see.",
+    ].join("\n"),
+  );
+}
+
+/**
+ * The two ends of an app transfer. An id is taken as is and nothing is listed,
+ * so the server is the one to say it is the app's own team. A name is matched
+ * against the whole `GET /v1/teams` list resolveTeamId reads, with the same
+ * exact-before-case-insensitive precedence, and refused when the match is the
+ * app's current team; matching only the other teams would let `Alpha` fall
+ * through to a team named `alpha`. Without a selector the other teams (the
+ * current one left out) are offered as a choice; a sole other team is taken
+ * without asking, as a sole team is everywhere else, since the mutation note
+ * shows it before anything moves.
+ */
+export async function resolveDestinationTeam(
+  destination: TeamSelector,
+  app: { name: string; teamId: string },
+  serverUrl: string,
+  token: string | undefined,
+  deps: CommandDeps,
+  options: ResolveOptions = {},
+): Promise<{ from: TransferTeam; to: TransferTeam }> {
+  if (destination.teamId !== undefined) {
+    return { from: { id: app.teamId }, to: { id: destination.teamId } };
+  }
+
+  const teams = await requestNamedResourceList(
+    deps,
+    serverUrl,
+    "/v1/teams",
+    token,
+    "teams",
+  );
+  const current = teams.find((team) => team.id === app.teamId);
+  const from: TransferTeam = current ?? { id: app.teamId };
+  const others = teams.filter((team) => team.id !== app.teamId);
+
+  if (destination.teamName !== undefined) {
+    const requestedName = destination.teamName;
+    const resolved =
+      matchNamedResource(teams, requestedName, "Team", "--dest-team-id") ??
+      teams.find((team) => team.id === requestedName) ??
+      null;
+
+    if (resolved !== null && resolved.id !== app.teamId) {
+      return { from, to: resolved };
+    }
+
+    throw new UsageError(
+      [
+        resolved !== null
+          ? `App "${app.name}" is already in team "${resolved.name}".`
+          : `Team "${requestedName}" not found.`,
+        others.length === 0
+          ? `Context: server ${serverUrl}; app ${app.name} is in the only team you can see.`
+          : `Context: server ${serverUrl}; other teams: ${formatNamedResources(others)}.`,
+        others.length === 0
+          ? "Next: ask an admin of the destination team to add you to it."
+          : "Next: pass --dest-team with one of the other teams above.",
+      ].join("\n"),
+    );
+  }
+
+  if (others.length === 0) {
+    throw noOtherTeamError(serverUrl, app.name, from);
+  }
+
+  if (!canPickDestinationTeam(deps, options)) {
+    throw missingDestinationTeamError(serverUrl);
+  }
+
+  const [only] = others;
+  if (others.length === 1 && only !== undefined) {
+    return { from, to: only };
+  }
+
+  // canPickDestinationTeam checked deps.prompt.
+  const picked = await promptResource(
+    deps.prompt!,
+    "Select destination team",
+    others,
+    "team",
+  );
+
+  return { from, to: picked };
+}
+
+function noOtherTeamError(
+  serverUrl: string,
+  appName: string,
+  from: TransferTeam,
+): UsageError {
+  return new UsageError(
+    [
+      `No other team is available to transfer app "${appName}" to.`,
+      `Context: server ${serverUrl}; the app is in team ${from.name ?? from.id}, the only team you can see.`,
+      "Next: ask an admin of the destination team to add you to it, then run `cmpatch team list`.",
+    ].join("\n"),
+  );
+}
+
 export async function resolveAppId(
   app: AppSelector,
   serverUrl: string,
@@ -439,10 +569,16 @@ function parseReleaseListResponse(response: unknown): {
   };
 }
 
+/**
+ * `idFlag` is the flag the ambiguity error tells the user to pass instead;
+ * it defaults to `--<label>-id` and differs only where the command's id flag
+ * for this resource is named otherwise (app transfer's `--dest-team-id`).
+ */
 function matchNamedResource(
   resources: NamedResource[],
   requestedName: string,
   label: "App" | "Deployment" | "Team",
+  idFlag = `--${label.toLowerCase()}-id`,
 ): NamedResource | null {
   const exactMatches = resources.filter(
     (resource) => resource.name === requestedName,
@@ -453,7 +589,7 @@ function matchNamedResource(
   }
 
   if (exactMatches.length > 1) {
-    throw ambiguousResourceError(label, requestedName, exactMatches);
+    throw ambiguousResourceError(label, requestedName, exactMatches, idFlag);
   }
 
   const normalizedName = requestedName.toLocaleLowerCase();
@@ -466,7 +602,12 @@ function matchNamedResource(
   }
 
   if (caseInsensitiveMatches.length > 1) {
-    throw ambiguousResourceError(label, requestedName, caseInsensitiveMatches);
+    throw ambiguousResourceError(
+      label,
+      requestedName,
+      caseInsensitiveMatches,
+      idFlag,
+    );
   }
 
   return caseInsensitiveMatches[0];
@@ -476,6 +617,7 @@ function ambiguousResourceError(
   label: "App" | "Deployment" | "Team",
   requestedName: string,
   matches: NamedResource[],
+  idFlag: string,
 ): UsageError {
   return new UsageError(
     [
@@ -483,7 +625,7 @@ function ambiguousResourceError(
         .map((match) => `${match.name} (${match.id})`)
         .join(", ")}`,
       `Context: matched ${matches.length} ${label.toLowerCase()} resources by name.`,
-      `Next: choose an ID explicitly with --${label.toLowerCase()}-id where this command supports it.`,
+      `Next: choose an ID explicitly with ${idFlag} where this command supports it.`,
     ].join("\n"),
   );
 }

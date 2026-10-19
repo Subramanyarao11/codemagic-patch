@@ -4,8 +4,10 @@
 // (resolved from its TypeScript source via the alias below) so the shipped package
 // has no unpublishable workspace dependency.
 //
-// Every real npm dependency stays external (installed from the registry) — only
-// our first-party code is bundled. The output lives at dist/cmpatch-capacitor.js
+// Every package in `dependencies` stays external (installed from the registry). The
+// parsers `doctor` reads projects with (@babel/parser, fast-xml-parser, plist, xcode)
+// are devDependencies, so they are bundled too and `fflate` stays the one install
+// (specs/doctor/Spec.md › Decisions, 2). The output lives at dist/cmpatch-capacitor.js
 // (one level under dist/) so version.ts's `join(__dirname, "..", "package.json")`
 // resolves to the package root from both src/ and dist/.
 
@@ -31,7 +33,7 @@ await build({
   // Must not exceed the package.json engines floor (node ^20.19.0 || >=22.12.0).
   target: "node20",
   sourcemap: true,
-  // Keep published runtime deps external; bundle only first-party code.
+  // Keep published runtime deps external; bundle first-party code and devDependencies.
   external: Object.keys(pkg.dependencies ?? {}),
   alias: {
     "@codemagic/patch-shared": resolve(cliRoot, "../shared/src/index.ts"),

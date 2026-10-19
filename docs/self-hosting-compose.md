@@ -9,6 +9,13 @@
 > (this document) additionally needs public DNS, open ports 80/443, and an OAuth
 > app on GitHub, Bitbucket Cloud, and/or GitLab.
 
+> **Installing from your own machine?** `cmpatch selfhost install` runs this
+> document's installer over SSH and walks you through every step; follow the
+> [Install guide](https://patch.codemagic.io/docs/install) instead. This
+> document is the reference for running the scripts on the server yourself,
+> and for setups the wizard does not cover: an external PostgreSQL database,
+> several OAuth providers at once, and plain HTTP.
+
 This is the supported deployment path for Codemagic Patch — and in the initial
 open-source release, the only one. It runs the Codemagic Patch server as a single
 process in `MODE=all` on one Docker host with Caddy for HTTPS. By default the

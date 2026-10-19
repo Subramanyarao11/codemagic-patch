@@ -20,6 +20,8 @@ export function renderOutput(output: CommandOutput, format: OutputFormat): strin
       return [output.summary, ...(output.details ?? []).map((line) => `  ${line}`)]
         .map((line) => `${line}\n`)
         .join("");
+    case "report":
+      return output.text;
   }
 }
 

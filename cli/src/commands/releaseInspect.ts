@@ -32,12 +32,6 @@ export async function executeReleaseInspect(
   // `cmpatch demo` already has a tree open; lifecycle stays with the owner.
   sharedProgress?: Progress,
 ): Promise<unknown> {
-  if (command.logs) {
-    throw new UsageError(
-      "release inspect --logs requires a server worker log or event-stream API. Current API responses expose release metadata and latest job status only.",
-    );
-  }
-
   const releaseId = await resolveReleaseId(
     command.release,
     command.serverUrl,

@@ -17,8 +17,3 @@
 
 npm-debug.log*
 yarn-debug.log*
-# Generated markdown copies for dev server (source of truth is build/)
-/static/docs/
-/static/intro/
-/static/llms.txt
-/static/llms-full.txt

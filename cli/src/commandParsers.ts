@@ -1,9 +1,13 @@
 import type { UploadPolicy } from "@codemagic/patch-shared";
 
 import type {
+  ApiTokenSelector,
   AppSelector,
+  BinaryVersionFilterFlags,
   CommandDefaultFlagValues,
   DeploymentSelector,
+  FailureBucketFlags,
+  FailureEventsFlags,
   MemberInviteTarget,
   MemberUserSelector,
   OutputFormat,
@@ -13,6 +17,7 @@ import type {
   ReleasePatchCommand,
   ReleaseSelector,
   TeamSelector,
+  TimeseriesRange,
 } from "./commandTypes";
 import { promptableFlagForLabel } from "./promptableFlags";
 
@@ -209,7 +214,6 @@ const releaseInspectSchema: Record<string, FlagSchema> = {
   deploymentId: STRING_FLAG,
   format: STRING_FLAG,
   label: STRING_FLAG,
-  logs: BOOLEAN_FLAG,
   releaseId: STRING_FLAG,
   serverUrl: STRING_FLAG,
   team: STRING_FLAG,
@@ -220,7 +224,15 @@ const releaseInspectSchema: Record<string, FlagSchema> = {
   wait: BOOLEAN_FLAG,
 };
 
+// `--binary-version` / `--binary-version-prefix`; spread into the schema of
+// every command that takes the filter, and read with parseBinaryVersionFilter.
+const binaryVersionFilterSchema = {
+  binaryVersion: STRING_FLAG,
+  binaryVersionPrefix: STRING_FLAG,
+} as const satisfies Record<string, FlagSchema>;
+
 const releaseListSchema: Record<string, FlagSchema> = {
+  ...binaryVersionFilterSchema,
   app: STRING_FLAG,
   appId: STRING_FLAG,
   deployment: STRING_FLAG,
@@ -323,6 +335,23 @@ const whoamiSchema: Record<string, FlagSchema> = {
   token: STRING_FLAG,
 };
 
+const serverStatusSchema: Record<string, FlagSchema> = {
+  serverUrl: STRING_FLAG,
+  token: STRING_FLAG,
+};
+
+const teamListSchema: Record<string, FlagSchema> = {
+  serverUrl: STRING_FLAG,
+  token: STRING_FLAG,
+};
+
+const teamShowSchema: Record<string, FlagSchema> = {
+  serverUrl: STRING_FLAG,
+  team: STRING_FLAG,
+  teamId: STRING_FLAG,
+  token: STRING_FLAG,
+};
+
 const tokenCreateSchema: Record<string, FlagSchema> = {
   expiresInDays: INTEGER_FLAG,
   name: STRING_FLAG,
@@ -336,9 +365,12 @@ const tokenListSchema: Record<string, FlagSchema> = {
 };
 
 const tokenRevokeSchema: Record<string, FlagSchema> = {
+  name: STRING_FLAG,
+  nonInteractive: BOOLEAN_FLAG,
   serverUrl: STRING_FLAG,
   token: STRING_FLAG,
   tokenId: STRING_FLAG,
+  yes: BOOLEAN_FLAG,
 };
 
 const loginSchema: Record<string, FlagSchema> = {
@@ -405,31 +437,37 @@ const memberInviteListSchema: Record<string, FlagSchema> = {
 
 const memberInviteRevokeSchema: Record<string, FlagSchema> = {
   invitationId: STRING_FLAG,
+  nonInteractive: BOOLEAN_FLAG,
   serverUrl: STRING_FLAG,
   token: STRING_FLAG,
+  yes: BOOLEAN_FLAG,
 };
 
 const memberRemoveSchema: Record<string, FlagSchema> = {
   bindingId: STRING_FLAG,
   email: STRING_FLAG,
+  nonInteractive: BOOLEAN_FLAG,
   role: STRING_FLAG,
   serverUrl: STRING_FLAG,
   team: STRING_FLAG,
   teamId: STRING_FLAG,
   token: STRING_FLAG,
   userId: STRING_FLAG,
+  yes: BOOLEAN_FLAG,
 };
 
 const memberUpdateSchema: Record<string, FlagSchema> = {
   bindingId: STRING_FLAG,
   email: STRING_FLAG,
   fromRole: STRING_FLAG,
+  nonInteractive: BOOLEAN_FLAG,
   role: STRING_FLAG,
   serverUrl: STRING_FLAG,
   team: STRING_FLAG,
   teamId: STRING_FLAG,
   token: STRING_FLAG,
   userId: STRING_FLAG,
+  yes: BOOLEAN_FLAG,
 };
 
 const appListSchema: Record<string, FlagSchema> = {
@@ -472,6 +510,19 @@ const appSettingSchema: Record<string, FlagSchema> = {
 const appRemoveSchema: Record<string, FlagSchema> = {
   app: STRING_FLAG,
   appId: STRING_FLAG,
+  nonInteractive: BOOLEAN_FLAG,
+  serverUrl: STRING_FLAG,
+  team: STRING_FLAG,
+  teamId: STRING_FLAG,
+  token: STRING_FLAG,
+  yes: BOOLEAN_FLAG,
+};
+
+const appTransferSchema: Record<string, FlagSchema> = {
+  app: STRING_FLAG,
+  appId: STRING_FLAG,
+  destTeam: STRING_FLAG,
+  destTeamId: STRING_FLAG,
   nonInteractive: BOOLEAN_FLAG,
   serverUrl: STRING_FLAG,
   team: STRING_FLAG,
@@ -567,6 +618,73 @@ const deploymentMetricsSchema: Record<string, FlagSchema> = {
   teamId: STRING_FLAG,
   token: STRING_FLAG,
 };
+
+const deploymentTimeseriesSchema: Record<string, FlagSchema> = {
+  ...binaryVersionFilterSchema,
+  app: STRING_FLAG,
+  appId: STRING_FLAG,
+  deployment: STRING_FLAG,
+  deploymentId: STRING_FLAG,
+  format: STRING_FLAG,
+  from: STRING_FLAG,
+  range: STRING_FLAG,
+  serverUrl: STRING_FLAG,
+  seriesLimit: INTEGER_FLAG,
+  team: STRING_FLAG,
+  teamId: STRING_FLAG,
+  to: STRING_FLAG,
+  token: STRING_FLAG,
+};
+
+// `--reason` / `--code` / `--no-code`; spread into the schema of the four
+// failure drill-down commands and read with parseFailureBucketFlags.
+const failureBucketSchema = {
+  code: STRING_FLAG,
+  noCode: BOOLEAN_FLAG,
+  reason: STRING_FLAG,
+} as const satisfies Record<string, FlagSchema>;
+
+// `--cursor` / `--limit`, the page of the `failure-events` commands; read with
+// parseFailureEventsFlags.
+const failureEventsPageSchema = {
+  cursor: STRING_FLAG,
+  limit: INTEGER_FLAG,
+} as const satisfies Record<string, FlagSchema>;
+
+const deploymentFailuresSchema: Record<string, FlagSchema> = {
+  ...failureBucketSchema,
+  app: STRING_FLAG,
+  appId: STRING_FLAG,
+  deployment: STRING_FLAG,
+  deploymentId: STRING_FLAG,
+  format: STRING_FLAG,
+  serverUrl: STRING_FLAG,
+  team: STRING_FLAG,
+  teamId: STRING_FLAG,
+  token: STRING_FLAG,
+};
+
+const deploymentFailureEventsSchema: Record<string, FlagSchema> = {
+  ...deploymentFailuresSchema,
+  ...failureEventsPageSchema,
+};
+
+const releaseFailuresSchema: Record<string, FlagSchema> = {
+  ...releaseMetricsSchema,
+  ...failureBucketSchema,
+};
+
+const releaseFailureEventsSchema: Record<string, FlagSchema> = {
+  ...releaseFailuresSchema,
+  ...failureEventsPageSchema,
+};
+
+const TIMESERIES_RANGES = [
+  "7d",
+  "30d",
+  "90d",
+  "1y",
+] as const satisfies readonly TimeseriesRange[];
 
 const fingerprintSchema: Record<string, FlagSchema> = {
   format: STRING_FLAG,
@@ -769,6 +887,44 @@ function parseRolloutPercentage(
   }
 
   return value;
+}
+
+/**
+ * Reads the flags of binaryVersionFilterSchema. The two are mutually exclusive
+ * and neither may be blank; whether a value is a valid version stays a server
+ * decision.
+ */
+function parseBinaryVersionFilter(
+  flags: Record<string, FlagValue>,
+): BinaryVersionFilterFlags | ParseCliError {
+  const binaryVersion = readStringFlag(flags, "binaryVersion");
+  const binaryVersionPrefix = readStringFlag(flags, "binaryVersionPrefix");
+
+  for (const [value, label] of [
+    [binaryVersion, "binary-version"],
+    [binaryVersionPrefix, "binary-version-prefix"],
+  ] as const) {
+    if (value !== undefined && value.trim().length === 0) {
+      return {
+        error: `--${label} must not be empty`,
+        ok: false,
+        showHelp: true,
+      };
+    }
+  }
+
+  if (binaryVersion !== undefined && binaryVersionPrefix !== undefined) {
+    return {
+      error: "--binary-version cannot be combined with --binary-version-prefix",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  return {
+    ...(binaryVersion !== undefined ? { binaryVersion } : {}),
+    ...(binaryVersionPrefix !== undefined ? { binaryVersionPrefix } : {}),
+  };
 }
 
 function hasFlag(flags: Record<string, FlagValue>, key: string): boolean {
@@ -2532,7 +2688,6 @@ export function parseReleaseInspect(
     command: {
       ...(format !== undefined ? { format } : {}),
       kind: "release-inspect",
-      logs: parsedFlags.flags.logs === true,
       release,
       serverUrl,
       timeoutSeconds,
@@ -2594,8 +2749,15 @@ export function parseReleaseList(
     };
   }
 
+  const binaryVersionFilter = parseBinaryVersionFilter(parsedFlags.flags);
+
+  if (isParseError(binaryVersionFilter)) {
+    return binaryVersionFilter;
+  }
+
   return {
     command: {
+      ...binaryVersionFilter,
       deployment,
       ...(format !== undefined ? { format } : {}),
       ...(include === "metrics" ? { includeMetrics: true } : {}),
@@ -2658,6 +2820,438 @@ export function parseDeploymentMetrics(
         : {}),
     },
     ok: true,
+  };
+}
+
+export function parseDeploymentTimeseries(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, deploymentTimeseriesSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const deployment = parseDeploymentSelector(parsedFlags.flags);
+  const format = parseOutputFormat(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(deployment)) {
+    return deployment;
+  }
+
+  if (isParseError(format)) {
+    return format;
+  }
+
+  const range = parseTimeseriesRange(parsedFlags.flags);
+
+  if (isParseError(range)) {
+    return range;
+  }
+
+  const binaryVersionFilter = parseBinaryVersionFilter(parsedFlags.flags);
+
+  if (isParseError(binaryVersionFilter)) {
+    return binaryVersionFilter;
+  }
+
+  const seriesLimit = parsedFlags.flags.seriesLimit;
+
+  if (typeof seriesLimit === "number" && seriesLimit < 1) {
+    return {
+      error: "--series-limit must be an integer greater than or equal to 1",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  return {
+    command: {
+      ...binaryVersionFilter,
+      deployment,
+      ...(format !== undefined ? { format } : {}),
+      kind: "deployment-timeseries",
+      ...range,
+      ...(typeof seriesLimit === "number" ? { seriesLimit } : {}),
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+/**
+ * Reads `--range` or `--from`/`--to`, which are mutually exclusive. `--from`
+ * and `--to` may each be given alone (the server defaults the other); neither
+ * may be blank, and whether they parse as datetimes stays a server decision.
+ */
+function parseTimeseriesRange(
+  flags: Record<string, FlagValue>,
+): { from?: string; range?: TimeseriesRange; to?: string } | ParseCliError {
+  const range = readStringFlag(flags, "range");
+  const from = readStringFlag(flags, "from");
+  const to = readStringFlag(flags, "to");
+
+  for (const [value, label] of [
+    [from, "from"],
+    [to, "to"],
+  ] as const) {
+    if (value !== undefined && value.trim().length === 0) {
+      return {
+        error: `--${label} must not be empty`,
+        ok: false,
+        showHelp: true,
+      };
+    }
+  }
+
+  if (range === undefined) {
+    return {
+      ...(from !== undefined ? { from } : {}),
+      ...(to !== undefined ? { to } : {}),
+    };
+  }
+
+  if (from !== undefined || to !== undefined) {
+    return {
+      error: "--range cannot be combined with --from or --to",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const preset = TIMESERIES_RANGES.find((candidate) => candidate === range);
+
+  if (preset === undefined) {
+    return {
+      error: `--range must be one of ${TIMESERIES_RANGES.join(", ")}`,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  return { range: preset };
+}
+
+export function parseDeploymentFailures(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, deploymentFailuresSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const deployment = parseDeploymentSelector(parsedFlags.flags);
+  const format = parseOutputFormat(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(deployment)) {
+    return deployment;
+  }
+
+  if (isParseError(format)) {
+    return format;
+  }
+
+  const bucket = parseFailureBucketFlags(parsedFlags.flags, "deployment");
+
+  if (isParseError(bucket)) {
+    return bucket;
+  }
+
+  return {
+    command: {
+      ...bucket,
+      deployment,
+      ...(format !== undefined ? { format } : {}),
+      kind: "deployment-failures",
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+export function parseDeploymentFailureEvents(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, deploymentFailureEventsSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const deployment = parseDeploymentSelector(parsedFlags.flags);
+  const format = parseOutputFormat(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(deployment)) {
+    return deployment;
+  }
+
+  if (isParseError(format)) {
+    return format;
+  }
+
+  const events = parseFailureEventsFlags(parsedFlags.flags, "deployment");
+
+  if (isParseError(events)) {
+    return events;
+  }
+
+  return {
+    command: {
+      ...events,
+      deployment,
+      ...(format !== undefined ? { format } : {}),
+      kind: "deployment-failure-events",
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+export function parseReleaseFailures(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, releaseFailuresSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const release = parseReleaseSelector(parsedFlags.flags);
+  const format = parseOutputFormat(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(release)) {
+    return release;
+  }
+
+  if (isParseError(format)) {
+    return format;
+  }
+
+  const bucket = parseFailureBucketFlags(parsedFlags.flags, "release");
+
+  if (isParseError(bucket)) {
+    return bucket;
+  }
+
+  return {
+    command: {
+      ...bucket,
+      ...(format !== undefined ? { format } : {}),
+      kind: "release-failures",
+      release,
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+export function parseReleaseFailureEvents(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, releaseFailureEventsSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const release = parseReleaseSelector(parsedFlags.flags);
+  const format = parseOutputFormat(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(release)) {
+    return release;
+  }
+
+  if (isParseError(format)) {
+    return format;
+  }
+
+  const events = parseFailureEventsFlags(parsedFlags.flags, "release");
+
+  if (isParseError(events)) {
+    return events;
+  }
+
+  return {
+    command: {
+      ...events,
+      ...(format !== undefined ? { format } : {}),
+      kind: "release-failure-events",
+      release,
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+/**
+ * Reads the flags of failureBucketSchema. `--reason` is required; the
+ * reasons themselves are the `failure_reasons` keys of the scope's metrics
+ * command, which the error names. `--code` and `--no-code` are mutually
+ * exclusive, and no value may be blank: a blank `--code` must not quietly
+ * become the no-code bucket.
+ */
+function parseFailureBucketFlags(
+  flags: Record<string, FlagValue>,
+  scope: "deployment" | "release",
+): FailureBucketFlags | ParseCliError {
+  const reason = readStringFlag(flags, "reason");
+  const code = readStringFlag(flags, "code");
+  const noCode = flags.noCode === true;
+
+  for (const [value, label] of [
+    [reason, "reason"],
+    [code, "code"],
+  ] as const) {
+    if (value !== undefined && value.trim().length === 0) {
+      return {
+        error: `--${label} must not be empty`,
+        ok: false,
+        showHelp: true,
+      };
+    }
+  }
+
+  if (reason === undefined) {
+    return {
+      error: `Missing required flag --reason. Take a reason from failure_reasons in \`cmpatch ${scope} metrics --format json\`.`,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  if (code !== undefined && noCode) {
+    return {
+      error: "--code cannot be combined with --no-code",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  return {
+    ...(code !== undefined
+      ? { codeBucket: { code, kind: "code" as const } }
+      : noCode
+        ? { codeBucket: { kind: "no-code" as const } }
+        : {}),
+    reason,
+  };
+}
+
+/**
+ * Reads failureBucketSchema plus failureEventsPageSchema. Events always
+ * belong to one code bucket, so `--code` or `--no-code` is required. A blank
+ * `--cursor` is rejected rather than sent, since the server would restart the
+ * feed at the newest event; the cursor is otherwise opaque and passed as is.
+ */
+function parseFailureEventsFlags(
+  flags: Record<string, FlagValue>,
+  scope: "deployment" | "release",
+): FailureEventsFlags | ParseCliError {
+  const bucket = parseFailureBucketFlags(flags, scope);
+
+  if (isParseError(bucket)) {
+    return bucket;
+  }
+
+  if (bucket.codeBucket === undefined) {
+    return {
+      error: "Missing required flag --code or --no-code",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const cursor = readStringFlag(flags, "cursor");
+
+  if (cursor !== undefined && cursor.trim().length === 0) {
+    return {
+      error: "--cursor must not be empty",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const limit = flags.limit;
+
+  if (typeof limit === "number" && limit < 1) {
+    return {
+      error: "--limit must be an integer greater than or equal to 1",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  return {
+    codeBucket: bucket.codeBucket,
+    ...(cursor !== undefined ? { cursor } : {}),
+    ...(typeof limit === "number" ? { limit } : {}),
+    reason: bucket.reason,
   };
 }
 
@@ -3356,6 +3950,108 @@ export function parseWhoami(
   };
 }
 
+export function parseServerStatus(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, serverStatusSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  return {
+    command: {
+      kind: "server-status",
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+export function parseTeamList(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, teamListSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  return {
+    command: {
+      kind: "team-list",
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
+export function parseTeamShow(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, teamShowSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const team = parseTeamSelector(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(team)) {
+    return team;
+  }
+
+  return {
+    command: {
+      kind: "team-show",
+      serverUrl,
+      team,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+    },
+    ok: true,
+  };
+}
+
 export function parseLogin(
   args: string[],
   defaults: CommandDefaultFlagValues = {},
@@ -3547,30 +4243,66 @@ export function parseTokenRevoke(
   }
 
   const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
-  const tokenId = ensureNonBlankString(
-    parsedFlags.flags,
-    "tokenId",
-    "token-id",
-  );
+  const apiToken = parseApiTokenSelector(parsedFlags.flags);
 
   if (isParseError(serverUrl)) {
     return serverUrl;
   }
 
-  if (isParseError(tokenId)) {
-    return tokenId;
+  if (isParseError(apiToken)) {
+    return apiToken;
   }
 
   return {
     command: {
+      apiToken,
       kind: "token-revoke",
+      ...(parsedFlags.flags.nonInteractive === true
+        ? { nonInteractive: true }
+        : {}),
       serverUrl,
       ...(typeof parsedFlags.flags.token === "string"
         ? { token: parsedFlags.flags.token }
         : {}),
-      tokenId,
+      ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
     },
     ok: true,
+  };
+}
+
+function parseApiTokenSelector(
+  flags: Record<string, FlagValue>,
+): ApiTokenSelector | ParseCliError {
+  const tokenId = typeof flags.tokenId === "string" ? flags.tokenId : undefined;
+  const name = typeof flags.name === "string" ? flags.name : undefined;
+  const blankSelectorError =
+    emptyStringFlagError(tokenId, "token-id") ??
+    emptyStringFlagError(name, "name");
+
+  if (blankSelectorError) {
+    return blankSelectorError;
+  }
+
+  if (tokenId !== undefined && name !== undefined) {
+    return {
+      error: "--token-id cannot be combined with --name",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  if (tokenId !== undefined) {
+    return { tokenId };
+  }
+
+  if (name !== undefined) {
+    return { name };
+  }
+
+  return {
+    error: "Missing required flag --token-id or --name",
+    ok: false,
+    showHelp: true,
   };
 }
 
@@ -3863,10 +4595,14 @@ export function parseMemberInviteRevoke(
     command: {
       invitationId,
       kind: "member-invite-revoke",
+      ...(parsedFlags.flags.nonInteractive === true
+        ? { nonInteractive: true }
+        : {}),
       serverUrl,
       ...(typeof parsedFlags.flags.token === "string"
         ? { token: parsedFlags.flags.token }
         : {}),
+      ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
     },
     ok: true,
   };
@@ -3922,10 +4658,14 @@ export function parseMemberRemove(
       command: {
         bindingId,
         kind: "member-remove",
+        ...(parsedFlags.flags.nonInteractive === true
+          ? { nonInteractive: true }
+          : {}),
         serverUrl,
         ...(typeof parsedFlags.flags.token === "string"
           ? { token: parsedFlags.flags.token }
           : {}),
+        ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
       },
       ok: true,
     };
@@ -3950,6 +4690,9 @@ export function parseMemberRemove(
   return {
     command: {
       kind: "member-remove",
+      ...(parsedFlags.flags.nonInteractive === true
+        ? { nonInteractive: true }
+        : {}),
       roleKey,
       serverUrl,
       team,
@@ -3957,6 +4700,7 @@ export function parseMemberRemove(
       ...(typeof parsedFlags.flags.token === "string"
         ? { token: parsedFlags.flags.token }
         : {}),
+      ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
     },
     ok: true,
   };
@@ -4017,11 +4761,15 @@ export function parseMemberUpdate(
       command: {
         bindingId,
         kind: "member-update",
+        ...(parsedFlags.flags.nonInteractive === true
+          ? { nonInteractive: true }
+          : {}),
         roleKey,
         serverUrl,
         ...(typeof parsedFlags.flags.token === "string"
           ? { token: parsedFlags.flags.token }
           : {}),
+        ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
       },
       ok: true,
     };
@@ -4049,6 +4797,9 @@ export function parseMemberUpdate(
   return {
     command: {
       kind: "member-update",
+      ...(parsedFlags.flags.nonInteractive === true
+        ? { nonInteractive: true }
+        : {}),
       roleKey,
       serverUrl,
       team,
@@ -4057,6 +4808,7 @@ export function parseMemberUpdate(
       ...(typeof parsedFlags.flags.token === "string"
         ? { token: parsedFlags.flags.token }
         : {}),
+      ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
     },
     ok: true,
   };
@@ -4213,20 +4965,14 @@ export function parseAppSetting(
     return app;
   }
 
-  if (!hasFlag(parsedFlags.flags, "requireCodeSigning")) {
-    return {
-      error: "Missing required flag --require-code-signing",
-      missing: ["requireCodeSigning"],
-      ok: false,
-      showHelp: true,
-    };
-  }
-
   return {
     command: {
       app,
       kind: "app-setting",
-      requireCodeSigning: parsedFlags.flags.requireCodeSigning === true,
+      // Absent means a read: the command shows the current settings instead.
+      ...(hasFlag(parsedFlags.flags, "requireCodeSigning")
+        ? { requireCodeSigning: parsedFlags.flags.requireCodeSigning === true }
+        : {}),
       serverUrl,
       ...(typeof parsedFlags.flags.token === "string"
         ? { token: parsedFlags.flags.token }
@@ -4277,6 +5023,93 @@ export function parseAppRemove(
     },
     ok: true,
   };
+}
+
+export function parseAppTransfer(
+  args: string[],
+  defaults: CommandDefaultFlagValues = {},
+): ParseCliResult {
+  const parsedFlags = parseFlags(args, appTransferSchema, defaults);
+
+  if (!parsedFlags.ok) {
+    return {
+      error: parsedFlags.error,
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  const serverUrl = ensureString(parsedFlags.flags, "serverUrl", "server-url");
+  const app = parseAppSelector(parsedFlags.flags);
+  const destTeam = parseDestinationTeamSelector(parsedFlags.flags);
+
+  if (isParseError(serverUrl)) {
+    return serverUrl;
+  }
+
+  if (isParseError(app)) {
+    return app;
+  }
+
+  if (isParseError(destTeam)) {
+    return destTeam;
+  }
+
+  return {
+    command: {
+      app,
+      destTeam,
+      kind: "app-transfer",
+      ...(parsedFlags.flags.nonInteractive === true
+        ? { nonInteractive: true }
+        : {}),
+      serverUrl,
+      ...(typeof parsedFlags.flags.token === "string"
+        ? { token: parsedFlags.flags.token }
+        : {}),
+      ...(parsedFlags.flags.yes === true ? { yes: true } : {}),
+    },
+    ok: true,
+  };
+}
+
+/**
+ * The team an app is transferred to. Neither flag is not a parse error: the
+ * destination is then picked from the other teams at execution, where the
+ * app's current team is known, or refused there when nobody can be asked.
+ */
+function parseDestinationTeamSelector(
+  flags: Record<string, FlagValue>,
+): TeamSelector | ParseCliError {
+  const teamId =
+    typeof flags.destTeamId === "string" ? flags.destTeamId : undefined;
+  const teamName =
+    typeof flags.destTeam === "string" ? flags.destTeam : undefined;
+  const blankSelectorError =
+    emptyStringFlagError(teamId, "dest-team-id") ??
+    emptyStringFlagError(teamName, "dest-team");
+
+  if (blankSelectorError) {
+    return blankSelectorError;
+  }
+
+  if (teamId !== undefined && teamName !== undefined) {
+    return {
+      error: "--dest-team-id cannot be combined with --dest-team",
+      ok: false,
+      showHelp: true,
+    };
+  }
+
+  if (teamId !== undefined) {
+    return { teamId };
+  }
+
+  if (teamName !== undefined) {
+    return { teamName };
+  }
+
+  return {};
 }
 
 export function parseDeploymentList(

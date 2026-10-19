@@ -17,6 +17,7 @@ import {
   type CommandDeps,
   UsageError,
 } from "./shared";
+import { assertMutationConfirmable, enforceMutationSafety } from "./mutationSafety";
 import { resolveTeamId } from "./resolveNames";
 
 type Role = {
@@ -206,6 +207,18 @@ export async function executeMemberInviteRevoke(
   command: MemberInviteRevokeCommand,
   deps: CommandDeps,
 ): Promise<unknown> {
+  // The invitation id is all the command has: the email and team would take a
+  // team-scoped list read, so the note names the id the user passed.
+  await enforceMutationSafety(deps, {
+    commandName: "member invite-revoke",
+    fields: [
+      ["serverUrl", command.serverUrl],
+      ["invitationId", command.invitationId],
+    ],
+    nonInteractive: command.nonInteractive === true,
+    yes: command.yes === true,
+  });
+
   return authenticatedRequest(deps, {
     init: {
       method: "DELETE",
@@ -223,16 +236,44 @@ export async function executeMemberRemove(
   command: MemberRemoveCommand,
   deps: CommandDeps,
 ): Promise<unknown> {
-  const bindingId =
-    command.bindingId ??
-    (await resolveRoleBindingId(
+  const safety = {
+    commandName: "member remove",
+    nonInteractive: command.nonInteractive === true,
+    yes: command.yes === true,
+  };
+  // The note names the member the reads find, so the confirm comes after
+  // them; a run that could not answer it is refused before the first read.
+  assertMutationConfirmable(deps, safety);
+
+  let bindingId: string;
+  let fields: Array<[string, string | undefined]>;
+
+  if (command.bindingId !== undefined) {
+    bindingId = command.bindingId;
+    fields = [
+      ["serverUrl", command.serverUrl],
+      ["bindingId", bindingId],
+    ];
+  } else {
+    const { binding, teamId } = await resolveRoleBinding(
       command.team,
       command.user,
       command.roleKey,
       command.serverUrl,
       command.token,
       deps,
-    ));
+    );
+    bindingId = binding.id;
+    fields = [
+      ["serverUrl", command.serverUrl],
+      ["teamId", teamId],
+      ["userId", binding.user.id],
+      ["email", binding.user.email],
+      ["role", binding.role.key],
+    ];
+  }
+
+  await enforceMutationSafety(deps, { ...safety, fields });
 
   return authenticatedRequest(deps, {
     init: {
@@ -278,22 +319,53 @@ export async function executeMemberUpdate(
   command: MemberUpdateCommand,
   deps: CommandDeps,
 ): Promise<unknown> {
-  const bindingId =
-    command.bindingId ??
-    (await resolveRoleBindingId(
+  const safety = {
+    commandName: "member update",
+    nonInteractive: command.nonInteractive === true,
+    yes: command.yes === true,
+  };
+  // As in member remove: the confirm follows the reads that name the member
+  // and check the new role, and a run that could not answer it reads nothing.
+  assertMutationConfirmable(deps, safety);
+
+  let bindingId: string;
+  let fields: Array<[string, string | undefined]>;
+
+  if (command.bindingId !== undefined) {
+    bindingId = command.bindingId;
+    fields = [
+      ["serverUrl", command.serverUrl],
+      ["bindingId", bindingId],
+      ["role", command.roleKey],
+    ];
+  } else {
+    const { binding, teamId } = await resolveRoleBinding(
       command.team,
       command.user,
       command.fromRoleKey,
       command.serverUrl,
       command.token,
       deps,
-    ));
+    );
+    bindingId = binding.id;
+    fields = [
+      ["serverUrl", command.serverUrl],
+      ["teamId", teamId],
+      ["userId", binding.user.id],
+      ["email", binding.user.email],
+      ["fromRole", binding.role.key],
+      ["role", command.roleKey],
+    ];
+  }
+
   const roleId = await resolveRoleId(
     command.roleKey,
     command.serverUrl,
     command.token,
     deps,
   );
+
+  await enforceMutationSafety(deps, { ...safety, fields });
 
   return authenticatedRequest(deps, {
     init: {
@@ -314,14 +386,14 @@ export async function executeMemberUpdate(
 
 // `roleKey` narrows to a single binding when the member holds several roles.
 // It is optional for `member update`, where the caller may omit --from-role.
-async function resolveRoleBindingId(
+async function resolveRoleBinding(
   team: MemberListCommand["team"],
   user: MemberUserSelector,
   roleKey: string | undefined,
   serverUrl: string,
   token: string | undefined,
   deps: CommandDeps,
-): Promise<string> {
+): Promise<{ binding: RoleBinding; teamId: string }> {
   const teamId = await resolveTeamId(team, serverUrl, token, deps);
   const response = await authenticatedRequest(deps, {
     init: {
@@ -341,7 +413,7 @@ async function resolveRoleBindingId(
   );
 
   if (matches.length === 1) {
-    return matches[0].id;
+    return { binding: matches[0], teamId };
   }
 
   const userDescription =

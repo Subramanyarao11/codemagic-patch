@@ -1,8 +1,10 @@
 import type {
+  AppTransferCommand,
   CliCommand,
   CommandDefaultFlagValues,
   ParseCliResult,
   DeploymentSelector,
+  FailureBucketFlags,
   PromptableFlag,
 } from "./commandTypes";
 import type { ActionSummary, ObjectField } from "./resultView";
@@ -13,17 +15,21 @@ import {
   parseAppCreate,
   parseAppList,
   parseAppRemove,
+  parseAppTransfer,
   parseAppRename,
   parseAppSetting,
   parseAppShow,
   parseDebug,
   parseDeploymentClear,
   parseDeploymentCreate,
+  parseDeploymentFailureEvents,
+  parseDeploymentFailures,
   parseDeploymentHistory,
   parseDeploymentList,
   parseDeploymentMetrics,
   parseDeploymentRemove,
   parseDeploymentRename,
+  parseDeploymentTimeseries,
   parseDoctor,
   parseFingerprint,
   parseLogin,
@@ -38,6 +44,8 @@ import {
   parseMemberUpdate,
   parseRawArgvCommand,
   parseReleaseCreate,
+  parseReleaseFailureEvents,
+  parseReleaseFailures,
   parseReleaseInspect,
   parseReleaseList,
   parseReleaseMetrics,
@@ -49,6 +57,9 @@ import {
   parseReleaseRollback,
   parseReleaseShow,
   parseReleaseStatus,
+  parseServerStatus,
+  parseTeamList,
+  parseTeamShow,
   parseTokenCreate,
   parseTokenList,
   parseTokenRevoke,
@@ -57,6 +68,7 @@ import {
 import { executeAppCreate } from "./commands/appCreate";
 import { executeAppList } from "./commands/appList";
 import { executeAppRemove } from "./commands/appRemove";
+import { executeAppTransfer } from "./commands/appTransfer";
 import { executeAppRename } from "./commands/appRename";
 import { executeAppSetting } from "./commands/appSetting";
 import { executeAppShow } from "./commands/appShow";
@@ -67,6 +79,18 @@ import { executeDeploymentList } from "./commands/deploymentList";
 import { executeDeploymentMetrics } from "./commands/deploymentMetrics";
 import { executeDeploymentRename } from "./commands/deploymentRename";
 import { executeDeploymentRemove } from "./commands/deploymentRemove";
+import {
+  executeDeploymentTimeseries,
+  readBucketDay,
+  renderDeploymentTimeseriesNote,
+} from "./commands/deploymentTimeseries";
+import {
+  executeDeploymentFailureEvents,
+  executeDeploymentFailures,
+  executeReleaseFailureEvents,
+  executeReleaseFailures,
+  renderFailureEventsCursorNote,
+} from "./commands/failures";
 import { executeDebug } from "./commands/debug";
 import { executeDoctor, renderDoctorTable } from "./commands/doctor";
 import { executeWireCommand } from "./commands/wire";
@@ -100,9 +124,14 @@ import { executeBundle, executeReleaseReact } from "./commands/releaseReact";
 import { executeReleaseRollback } from "./commands/releaseRollback";
 import { executeReleaseShow } from "./commands/releaseShow";
 import {
+  executeServerStatus,
+  SERVER_STATUS_FIELDS,
+} from "./commands/serverStatus";
+import {
   type CommandDeps,
   UsageError,
 } from "./commands/shared";
+import { executeTeamList, executeTeamShow } from "./commands/team";
 import { executeTokenCreate } from "./commands/tokenCreate";
 import { executeTokenList } from "./commands/tokenList";
 import { executeTokenRevoke } from "./commands/tokenRevoke";
@@ -139,6 +168,7 @@ type CommandHelpGroupName =
   | "diagnostics"
   | "fingerprint"
   | "management"
+  | "metrics"
   | "release"
   | "selfhost";
 
@@ -212,6 +242,11 @@ export type CommandDefaultPolicy = {
 export type CommandHelpGroup = {
   examples: readonly string[];
   name: CommandHelpGroupName;
+  /**
+   * One line pointing at a related group, for commands of this group's nouns
+   * that live elsewhere (e.g. `deployment metrics` under `metrics`).
+   */
+  seeAlso?: string;
   summary: string;
   topics: readonly string[];
 };
@@ -432,6 +467,52 @@ const serverFlagHelp: readonly CommandFlagHelp[] = [
   flagHelp.token,
 ];
 
+// The binary_version / binary_version_prefix query pair, shared by every
+// command that narrows its result to the app versions devices run.
+const binaryVersionFilterFlagHelp: readonly CommandFlagHelp[] = [
+  {
+    flag: "--binary-version <version>",
+    summary: "Only this binary version, e.g. 1.2.3",
+  },
+  {
+    flag: "--binary-version-prefix <prefix>",
+    summary: "Only versions under this prefix, e.g. 1.2",
+  },
+];
+
+// The failure drill-down flags. --no-code is a bucket of its own (failures
+// whose payload carried no code), never "all codes", and the help says so.
+const failureReasonFlagHelp: CommandFlagHelp = {
+  flag: "--reason <reason>",
+  summary: "Failure reason from failure_reasons, e.g. network",
+};
+
+const failuresBucketFlagHelp: readonly CommandFlagHelp[] = [
+  failureReasonFlagHelp,
+  {
+    flag: "--code <code>",
+    summary: "Show this code's exit reasons and messages",
+  },
+  {
+    flag: "--no-code",
+    summary: "Same, for failures that carried no code (not all codes)",
+  },
+];
+
+const failureEventsFlagHelp: readonly CommandFlagHelp[] = [
+  failureReasonFlagHelp,
+  { flag: "--code <code>", summary: "Events with this code" },
+  {
+    flag: "--no-code",
+    summary: "Events that carried no code instead (not all codes)",
+  },
+  { flag: "--limit <1-100>", summary: "Events per page (server default 25)" },
+  {
+    flag: "--cursor <cursor>",
+    summary: "Next page: the next_cursor of the previous one",
+  },
+];
+
 const helpGroups: readonly CommandHelpGroup[] = [
   {
     examples: [
@@ -439,6 +520,7 @@ const helpGroups: readonly CommandHelpGroup[] = [
       "cmpatch release-react --deployment Staging --mandatory",
     ],
     name: "release",
+    seeAlso: "See also: `cmpatch help metrics` for release metrics.",
     summary: "Publish, inspect, patch, promote, and roll back OTA releases.",
     topics: ["release"],
   },
@@ -446,10 +528,14 @@ const helpGroups: readonly CommandHelpGroup[] = [
     examples: [
       "cmpatch app list --format table",
       "cmpatch deployment list --app MyApp --format table",
+      "cmpatch team list",
+      "cmpatch app transfer --app MyApp --dest-team Partner",
     ],
     name: "management",
-    summary: "Manage apps, deployments, and deployment history.",
-    topics: ["management", "app", "deployment"],
+    seeAlso:
+      "See also: `cmpatch help metrics` for deployment metrics and history.",
+    summary: "List teams; manage apps and deployments.",
+    topics: ["management", "app", "deployment", "team"],
   },
   {
     examples: [
@@ -462,12 +548,27 @@ const helpGroups: readonly CommandHelpGroup[] = [
   },
   {
     examples: [
+      "cmpatch deployment metrics --app MyApp-iOS --deployment Staging",
+      "cmpatch deployment history --app MyApp-iOS --deployment Staging",
+      "cmpatch deployment timeseries --deployment Staging --range 7d",
+      "cmpatch deployment failures --deployment Staging --reason network",
+      "cmpatch release metrics --deployment Staging --label v42",
+      "cmpatch release failures --deployment Staging --label v42 --reason network",
+    ],
+    name: "metrics",
+    summary:
+      "Counters, daily time series, and failure drill-down for deployments and releases.",
+    topics: ["metrics"],
+  },
+  {
+    examples: [
       "cmpatch doctor",
       "cmpatch doctor --deployment Staging --verbose",
+      "cmpatch server status",
     ],
     name: "diagnostics",
-    summary: "Diagnose local setup and OTA readiness.",
-    topics: ["diagnostics"],
+    summary: "Diagnose local setup, OTA readiness, and the server's own health.",
+    topics: ["diagnostics", "server"],
   },
   {
     examples: [
@@ -955,6 +1056,58 @@ const commandSpecs: RunnableCommandSpec[] = [
     routes: [{ path: ["selfhost"] }],
   }),
   commandSpec({
+    commandName: "team list",
+    // No team default: this is how a user discovers which teams exist.
+    defaults: { serverUrl: true },
+    execute: executeTeamList,
+    kind: "team-list",
+    help: [
+      {
+        description: "List the teams you can see.",
+        flags: [{ flags: [flagHelp.format, ...serverFlagHelp] }],
+        group: "management",
+        usage: "cmpatch team list [flags]",
+      }
+    ],
+    parse: parseTeamList,
+    renderTable: (result) =>
+      renderTableOrEmpty(
+        result,
+        "teams",
+        "No teams found.",
+        ["ID", "NAME"],
+        (team) => [readCell(team, "id", ""), readCell(team, "name", "")],
+      ),
+    routes: [{ path: ["team", "list"] }],
+  }),
+  commandSpec({
+    commandName: "team show",
+    view: {
+      fields: [
+        ["Name", "team.name"],
+        ["Team ID", "team.id"],
+        ["Status", "team.status"],
+        ["Created", "team.created_at"],
+        ["Updated", "team.updated_at"],
+      ],
+      kind: "object",
+    },
+    defaults: { serverUrl: true, team: "always" },
+    execute: executeTeamShow,
+    kind: "team-show",
+    help: [
+      {
+        description:
+          "Show team details. Without a selector, shows the stored default team or the only team you can see.",
+        flags: [{ flags: [...teamSelectorFlagHelp, flagHelp.format, ...serverFlagHelp] }],
+        group: "management",
+        usage: "cmpatch team show [--team <name> | --team-id <id>] [flags]",
+      }
+    ],
+    parse: parseTeamShow,
+    routes: [{ path: ["team", "show"] }],
+  }),
+  commandSpec({
     commandName: "app create",
     view: {
       kind: "action",
@@ -1045,6 +1198,42 @@ const commandSpecs: RunnableCommandSpec[] = [
     routes: [{ path: ["app", "remove"] }],
   }),
   commandSpec({
+    commandName: "app transfer",
+    view: { kind: "action", summarize: summarizeTransfer },
+    defaults: { prompt: ["app"], serverUrl: true, team: "app-selector-explicit" },
+    execute: executeAppTransfer,
+    kind: "app-transfer",
+    help: [
+      {
+        description:
+          "Move an app and its deployments to another team. Confirms unless --yes; without --dest-team or --dest-team-id, offers the other teams.",
+        flags: [
+          {
+            flags: [
+              ...appSelectorFlags,
+              {
+                flag: "--dest-team <name>",
+                summary: "Team to move the app to",
+              },
+              {
+                flag: "--dest-team-id <id>",
+                summary: "Destination team id (alternative to --dest-team)",
+              },
+              flagHelp.yes,
+              flagHelp.nonInteractive,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "management",
+        usage:
+          "cmpatch app transfer (--app <name> | --app-id <id>) (--dest-team <name> | --dest-team-id <id>) [flags]",
+      }
+    ],
+    parse: parseAppTransfer,
+    routes: [{ path: ["app", "transfer"] }],
+  }),
+  commandSpec({
     commandName: "app rename",
     view: {
       kind: "action",
@@ -1075,26 +1264,41 @@ const commandSpecs: RunnableCommandSpec[] = [
   }),
   commandSpec({
     commandName: "app setting",
-    defaults: { mutatesWithoutConfirm: true, prompt: ["app", "requireCodeSigning"], serverUrl: true, team: "app-selector-explicit" },
+    // The read (no setting flag) and the update both answer `{ app }`, so the
+    // same row serves both: the value now, or the value just set.
+    view: {
+      fields: [
+        ["Name", "app.name"],
+        ["App ID", "app.id"],
+        ["Code signing", "app.require_code_signing"],
+      ],
+      kind: "object",
+    },
+    defaults: { mutatesWithoutConfirm: true, prompt: ["app"], serverUrl: true, team: "app-selector-explicit" },
     execute: executeAppSetting,
     kind: "app-setting",
     help: [
       {
-        description: "View or update app settings.",
+        description: "View app settings, or update them with --require-code-signing.",
+        examples: [
+          "cmpatch app setting --app MyApp-iOS",
+          "cmpatch app setting --app MyApp-iOS --require-code-signing=true",
+        ],
         flags: [
           {
             flags: [
               ...appSelectorFlags,
               {
                 flag: "--require-code-signing=<true|false>",
-                summary: "Update whether bundles must be signed",
+                summary: "Set whether bundles must be signed (omit to view the current value)",
               },
               ...serverFlagHelp,
             ],
           },
         ],
         group: "management",
-        usage: "cmpatch app setting (--app <name> | --app-id <id>) [flags]",
+        usage:
+          "cmpatch app setting (--app <name> | --app-id <id>) [--require-code-signing=<true|false>] [flags]",
       }
     ],
     parse: parseAppSetting,
@@ -1235,7 +1439,7 @@ const commandSpecs: RunnableCommandSpec[] = [
             ],
           },
         ],
-        group: "management",
+        group: "metrics",
         usage: "cmpatch deployment metrics --deployment <name> [flags]",
       }
     ],
@@ -1261,6 +1465,130 @@ const commandSpecs: RunnableCommandSpec[] = [
         },
       ),
     routes: [{ path: ["deployment", "metrics"] }],
+  }),
+  commandSpec({
+    commandName: "deployment timeseries",
+    defaults: { app: "deployment", deployment: "deployment-history", serverUrl: true, team: "app-selector" },
+    execute: executeDeploymentTimeseries,
+    kind: "deployment-timeseries",
+    help: [
+      {
+        description:
+          "Show a deployment's counters per UTC day. These are the numbers behind the dashboard's deployment chart. ACTIVE here is the devices active on that day; the ACTIVE column of `deployment metrics` is a lifetime counter. Without --range or --from/--to the server's default range applies (the last 30 days). The per-release series are in --format json.",
+        examples: [
+          "cmpatch deployment timeseries --deployment Staging --range 30d",
+          "cmpatch deployment timeseries --deployment-id <id> --binary-version 1.2.3",
+        ],
+        flags: [
+          {
+            flags: [
+              ...deploymentSelectorFlagHelp,
+              {
+                flag: "--range <7d|30d|90d|1y>",
+                summary: "Window ending now; not with --from/--to",
+              },
+              {
+                flag: "--from <iso>",
+                summary: "Range start, ISO 8601 (from that UTC day)",
+              },
+              {
+                flag: "--to <iso>",
+                summary: "Range end, ISO 8601; defaults to now",
+              },
+              ...binaryVersionFilterFlagHelp,
+              {
+                flag: "--series-limit <n>",
+                summary: "Most per-release series in the JSON output",
+              },
+              flagHelp.format,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "metrics",
+        usage: "cmpatch deployment timeseries --deployment <name> [flags]",
+      }
+    ],
+    parse: parseDeploymentTimeseries,
+    renderTable: (result, _command, palette) =>
+      `${renderTableOrEmpty(
+        result,
+        "totals",
+        "No activity in this range.",
+        ["DAY", "ACTIVE", "DOWNLOADED", "READY", "FAILED", "APPLIED"],
+        (bucket) => [
+          readBucketDay(bucket),
+          readCell(bucket, "active_devices", ""),
+          readCell(bucket, "downloaded", ""),
+          readCell(bucket, "installed", ""),
+          readCell(bucket, "failed", ""),
+          readCell(bucket, "success", ""),
+        ],
+      )}${renderDeploymentTimeseriesNote(result, palette)}`,
+    routes: [{ path: ["deployment", "timeseries"] }],
+  }),
+  commandSpec({
+    commandName: "deployment failures",
+    defaults: { app: "deployment", deployment: "deployment-history", serverUrl: true, team: "app-selector" },
+    execute: executeDeploymentFailures,
+    kind: "deployment-failures",
+    help: [
+      {
+        description:
+          "Break down a deployment's failures. --reason takes a key of failure_reasons from `deployment metrics --format json`. With --reason alone, the table lists the codes under that reason; --code <code> shows that code's top exit reasons and messages instead, and --no-code does the same for the failures whose payload carried no code, never for all codes. Single events: `deployment failure-events`.",
+        examples: [
+          "cmpatch deployment failures --deployment Staging --reason network",
+          "cmpatch deployment failures --deployment-id <id> --reason network --code 403",
+        ],
+        flags: [
+          {
+            flags: [
+              ...deploymentSelectorFlagHelp,
+              ...failuresBucketFlagHelp,
+              flagHelp.format,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "metrics",
+        usage: "cmpatch deployment failures --deployment <name> --reason <reason> [flags]",
+      }
+    ],
+    parse: parseDeploymentFailures,
+    renderTable: (result, command) => renderFailuresTable(result, command),
+    routes: [{ path: ["deployment", "failures"] }],
+  }),
+  commandSpec({
+    commandName: "deployment failure-events",
+    defaults: { app: "deployment", deployment: "deployment-history", serverUrl: true, team: "app-selector" },
+    execute: executeDeploymentFailureEvents,
+    kind: "deployment-failure-events",
+    help: [
+      {
+        description:
+          "List a deployment's single failure events. Newest first; pick the bucket as on `deployment failures`: --reason and either --code <code> or --no-code (the failures whose payload carried no code, never all codes). When more events remain, the table ends with the --cursor to pass for the next page; --format json carries it as next_cursor.",
+        examples: [
+          "cmpatch deployment failure-events --reason network --code 403 --limit 50",
+          "cmpatch deployment failure-events --reason install_fail --no-code",
+        ],
+        flags: [
+          {
+            flags: [
+              ...deploymentSelectorFlagHelp,
+              ...failureEventsFlagHelp,
+              flagHelp.format,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "metrics",
+        usage: "cmpatch deployment failure-events --reason <reason> --code <code> [flags]",
+      }
+    ],
+    parse: parseDeploymentFailureEvents,
+    renderTable: (result, _command, palette) =>
+      renderFailureEventsTable(result, palette),
+    routes: [{ path: ["deployment", "failure-events"] }],
   }),
   commandSpec({
     commandName: "deployment remove",
@@ -1389,6 +1717,25 @@ const commandSpecs: RunnableCommandSpec[] = [
     parse: parseDoctor,
     renderTable: renderDoctorTable,
     routes: [{ path: ["doctor"] }],
+  }),
+  commandSpec({
+    commandName: "server status",
+    view: { fields: SERVER_STATUS_FIELDS, kind: "object" },
+    defaults: { serverUrl: true },
+    execute: executeServerStatus,
+    kind: "server-status",
+    help: [
+      {
+        description:
+          "Show the server's own view of its database, storage, disk, download URL, and version. `cmpatch doctor` probes from this machine; `server status` reports what the server sees, as the dashboard's Status page does.",
+        examples: ["cmpatch server status", "cmpatch server status --format json"],
+        flags: [{ flags: [flagHelp.format, ...serverFlagHelp] }],
+        group: "diagnostics",
+        usage: "cmpatch server status [flags]",
+      }
+    ],
+    parse: parseServerStatus,
+    routes: [{ path: ["server", "status"] }],
   }),
   commandSpec({
     commandName: "fingerprint",
@@ -1641,7 +1988,7 @@ const commandSpecs: RunnableCommandSpec[] = [
     kind: "member-invite-revoke",
     help: [
       {
-        description: "Revoke a team invitation.",
+        description: "Revoke a team invitation (confirms unless --yes).",
         flags: [
           {
             flags: [
@@ -1649,6 +1996,8 @@ const commandSpecs: RunnableCommandSpec[] = [
                 flag: "--invitation-id <id>",
                 summary: "Invitation to revoke (see member invite-list)",
               },
+              flagHelp.yes,
+              flagHelp.nonInteractive,
               ...serverFlagHelp,
             ],
           },
@@ -1707,7 +2056,7 @@ const commandSpecs: RunnableCommandSpec[] = [
     kind: "member-remove",
     help: [
       {
-        description: "Remove a team role binding.",
+        description: "Remove a team role binding (confirms unless --yes).",
         flags: [
           {
             flags: [
@@ -1725,6 +2074,8 @@ const commandSpecs: RunnableCommandSpec[] = [
                 summary: "Binding id (alternative to member plus --role)",
               },
               ...teamSelectorFlagHelp,
+              flagHelp.yes,
+              flagHelp.nonInteractive,
               ...serverFlagHelp,
             ],
           },
@@ -1743,7 +2094,7 @@ const commandSpecs: RunnableCommandSpec[] = [
     kind: "member-update",
     help: [
       {
-        description: "Change a team member's role.",
+        description: "Change a team member's role (confirms unless --yes).",
         flags: [
           {
             flags: [
@@ -1765,6 +2116,8 @@ const commandSpecs: RunnableCommandSpec[] = [
                 summary: "Binding id (alternative to member selectors)",
               },
               ...teamSelectorFlagHelp,
+              flagHelp.yes,
+              flagHelp.nonInteractive,
               ...serverFlagHelp,
             ],
           },
@@ -1979,6 +2332,7 @@ const commandSpecs: RunnableCommandSpec[] = [
                 flag: "--include metrics",
                 summary: "Include per-release metrics",
               },
+              ...binaryVersionFilterFlagHelp,
               ...serverFlagHelp,
             ],
           },
@@ -1999,7 +2353,7 @@ const commandSpecs: RunnableCommandSpec[] = [
             ],
           },
         ],
-        group: "management",
+        group: "metrics",
         usage: "cmpatch deployment history --deployment <name> [flags]",
       }
     ],
@@ -2053,13 +2407,76 @@ const commandSpecs: RunnableCommandSpec[] = [
             ],
           },
         ],
-        group: "release",
+        group: "metrics",
         usage: "cmpatch release metrics --label <label> [flags]",
       }
     ],
     parse: parseReleaseMetrics,
     renderTable: renderReleaseMetricsTable,
     routes: [{ path: ["release", "metrics"] }],
+  }),
+  commandSpec({
+    commandName: "release failures",
+    defaults: { prompt: ["label"], deployment: "release", serverUrl: true, team: "app-selector", app: "release" },
+    execute: executeReleaseFailures,
+    kind: "release-failures",
+    help: [
+      {
+        description:
+          "Break down a release's failures. --reason takes a key of failure_reasons from `release metrics --format json`. With --reason alone, the table lists the codes under that reason; --code <code> shows that code's top exit reasons and messages instead, and --no-code does the same for the failures whose payload carried no code, never for all codes. Single events: `release failure-events`.",
+        examples: [
+          "cmpatch release failures --deployment Staging --label v42 --reason network",
+          "cmpatch release failures --release-id <id> --reason network --code 403",
+        ],
+        flags: [
+          {
+            flags: [
+              ...releaseSelectorFlagHelp,
+              ...failuresBucketFlagHelp,
+              flagHelp.format,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "metrics",
+        usage: "cmpatch release failures --label <label> --reason <reason> [flags]",
+      }
+    ],
+    parse: parseReleaseFailures,
+    renderTable: (result, command) => renderFailuresTable(result, command),
+    routes: [{ path: ["release", "failures"] }],
+  }),
+  commandSpec({
+    commandName: "release failure-events",
+    defaults: { prompt: ["label"], deployment: "release", serverUrl: true, team: "app-selector", app: "release" },
+    execute: executeReleaseFailureEvents,
+    kind: "release-failure-events",
+    help: [
+      {
+        description:
+          "List a release's single failure events. Newest first; pick the bucket as on `release failures`: --reason and either --code <code> or --no-code (the failures whose payload carried no code, never all codes). When more events remain, the table ends with the --cursor to pass for the next page; --format json carries it as next_cursor.",
+        examples: [
+          "cmpatch release failure-events --label v42 --reason network --code 403",
+          "cmpatch release failure-events --release-id <id> --reason network --no-code",
+        ],
+        flags: [
+          {
+            flags: [
+              ...releaseSelectorFlagHelp,
+              ...failureEventsFlagHelp,
+              flagHelp.format,
+              ...serverFlagHelp,
+            ],
+          },
+        ],
+        group: "metrics",
+        usage: "cmpatch release failure-events --reason <reason> --code <code> [flags]",
+      }
+    ],
+    parse: parseReleaseFailureEvents,
+    renderTable: (result, _command, palette) =>
+      renderFailureEventsTable(result, palette),
+    routes: [{ path: ["release", "failure-events"] }],
   }),
   commandSpec({
     commandName: "release promote",
@@ -2102,25 +2519,38 @@ const commandSpecs: RunnableCommandSpec[] = [
                 flag: "--dest-deployment-id <id>",
                 summary: "Destination deployment id (alternative to names)",
               },
+              flagHelp.noDuplicateReleaseError,
+              flagHelp.yes,
+              flagHelp.nonInteractive,
               ...serverFlagHelp,
             ],
           },
+          // The server copies only these three from the source release; rollout
+          // and disabled take their create defaults when omitted (100, off).
           {
             flags: [
-              flagHelp.releaseNotes,
-              flagHelp.rolloutPercentage,
               flagHelp.mandatory,
               {
                 flag: "--not-mandatory",
                 summary: "Clear the mandatory flag",
               },
-              flagHelp.disabled,
+              flagHelp.releaseNotes,
               flagHelp.targetBinaryVersion,
-              flagHelp.noDuplicateReleaseError,
-              flagHelp.yes,
-              flagHelp.nonInteractive,
             ],
-            title: "Override flags (default: copied from the source release)",
+            title: "Inherited from the source release unless overridden",
+          },
+          {
+            flags: [
+              {
+                ...flagHelp.rolloutPercentage,
+                summary: "Roll out to a percentage of devices (default: 100)",
+              },
+              {
+                ...flagHelp.disabled,
+                summary: "Create the release in the disabled state (default: off)",
+              },
+            ],
+            title: "Not inherited",
           },
         ],
         group: "release",
@@ -2440,7 +2870,11 @@ const commandSpecs: RunnableCommandSpec[] = [
     kind: "token-revoke",
     help: [
       {
-        description: "Revoke a personal access token.",
+        description: "Revoke a personal access token (confirms unless --yes).",
+        examples: [
+          "cmpatch token revoke --name ci-main",
+          "cmpatch token revoke --token-id <id>",
+        ],
         flags: [
           {
             flags: [
@@ -2448,12 +2882,18 @@ const commandSpecs: RunnableCommandSpec[] = [
                 flag: "--token-id <id>",
                 summary: "Token to revoke (see token list)",
               },
+              {
+                flag: "--name <name>",
+                summary: "Token to revoke by its exact name (alternative to --token-id)",
+              },
+              flagHelp.yes,
+              flagHelp.nonInteractive,
               ...serverFlagHelp,
             ],
           },
         ],
         group: "auth",
-        usage: "cmpatch token revoke --token-id <id> [flags]",
+        usage: "cmpatch token revoke (--token-id <id> | --name <name>) [flags]",
       }
     ],
     parse: parseTokenRevoke,
@@ -2593,6 +3033,28 @@ function summarizeDeletion(result: unknown): string | null {
   const id = typeof result.id === "string" ? result.id : "";
 
   return `Deleted ${resource}${id.length === 0 ? "" : ` ${id}`}`;
+}
+
+/**
+ * The transfer answers with the app as it now is. The destination's name is
+ * the one the user typed; a picked or id-selected team reads as its id, since
+ * the response carries only that.
+ */
+function summarizeTransfer(
+  result: unknown,
+  command: AppTransferCommand,
+): string | null {
+  const app = isRecord(result) ? result.app : undefined;
+
+  if (
+    !isRecord(app) ||
+    typeof app.name !== "string" ||
+    typeof app.team_id !== "string"
+  ) {
+    return null;
+  }
+
+  return `Transferred app ${app.name} to team ${command.destTeam.teamName ?? app.team_id}`;
 }
 
 /**
@@ -2830,6 +3292,80 @@ function renderTableOrEmpty(
   }
 
   return renderTable(headers, rows.map(mapRow));
+}
+
+/**
+ * `deployment failures` / `release failures`. Without a code bucket the
+ * response is the reason's codes; with one, it is that bucket's distribution:
+ * two blocks (exit reasons, messages) and the bucket total. A null code is the
+ * no-code bucket, which `--no-code` opens.
+ */
+function renderFailuresTable(
+  result: unknown,
+  command: FailureBucketFlags,
+): string {
+  if (command.codeBucket === undefined) {
+    return renderTableOrEmpty(
+      result,
+      "codes",
+      "No failures with this reason.",
+      ["CODE", "COUNT", "FIRST_SEEN", "LAST_SEEN"],
+      (code) => [
+        readCell(code, "code", "(no code)"),
+        readCell(code, "count", ""),
+        readCell(code, "first_seen_at", ""),
+        readCell(code, "last_seen_at", ""),
+      ],
+    );
+  }
+
+  const exitReasons = readArray(result, "exit_reasons");
+  const messages = readArray(result, "messages");
+  const total = isRecord(result) ? readCell(result, "total", "0") : "0";
+
+  if (total === "0") {
+    return "No events in this bucket.\n";
+  }
+
+  const block = (
+    rows: Record<string, unknown>[],
+    header: string,
+    emptyMessage: string,
+  ) =>
+    rows.length === 0
+      ? `${emptyMessage}\n`
+      : renderTable(
+          [header, "COUNT"],
+          rows.map((row) => [
+            readCell(row, "value", ""),
+            readCell(row, "count", ""),
+          ]),
+        );
+
+  return [
+    block(exitReasons, "EXIT_REASON", "No exit reasons reported (Android only)."),
+    block(messages, "MESSAGE", "No messages reported."),
+    `Total: ${total}\n`,
+  ].join("\n");
+}
+
+/**
+ * `deployment failure-events` / `release failure-events`: one row per event,
+ * and the --cursor for the next page under the table while one remains.
+ */
+function renderFailureEventsTable(result: unknown, palette: Palette): string {
+  return `${renderTableOrEmpty(
+    result,
+    "events",
+    "No events in this bucket.",
+    ["TIME", "DEVICE", "EXIT", "MESSAGE"],
+    (event) => [
+      readCell(event, "emitted_at", ""),
+      readCell(event, "device_id", ""),
+      readCell(event, "android_previous_process_exit", ""),
+      readCell(event, "message", ""),
+    ],
+  )}${renderFailureEventsCursorNote(result, palette)}`;
 }
 
 function readArray(value: unknown, key: string): Record<string, unknown>[] {

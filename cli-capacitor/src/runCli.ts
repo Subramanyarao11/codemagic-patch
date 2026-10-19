@@ -1,5 +1,5 @@
 import { parseCliArgs } from "./args";
-import { FORMAT_FLAG, readFormat } from "./command";
+import { FORMAT_FLAG, readRequestedFormat } from "./command";
 import { createDefaultDeps, type CliDeps } from "./deps";
 import {
   DeclinedError,
@@ -8,7 +8,7 @@ import {
   ValidationError,
 } from "./errors";
 import { renderHelp } from "./help";
-import { renderProblemDetails, writeLine } from "./output";
+import { renderProblemDetails, selectOutputFormat, writeLine } from "./output";
 import {
   exitCodeForProblemDetails,
   HttpProblemError,
@@ -36,13 +36,13 @@ export async function runCli(
         // Read before the command runs, so a bad --format is a usage error rather
         // than something discovered after the command has already changed state.
         const format = parsed.definition.flags.includes(FORMAT_FLAG)
-          ? readFormat(parsed.values)
+          ? selectOutputFormat(readRequestedFormat(parsed.values), deps.stdout)
           : "text";
         const output = await parsed.definition.run(parsed.values, deps);
         if (output !== undefined) {
           deps.stdout.write(renderOutput(output, format));
         }
-        return 0;
+        return output !== undefined && output.kind === "report" ? (output.exitCode ?? 0) : 0;
       }
     }
   } catch (error) {

@@ -4,7 +4,7 @@
 // can label its apps on an older server. So an unknown value is expected here,
 // not an error: it falls back to neutral guidance everywhere below.
 
-import { SOURCE_REPO_URL } from "../branding";
+import { PATCH_DOCS_SITE_URL } from "../branding";
 
 export type KnownFramework = "react-native" | "capacitor";
 
@@ -22,11 +22,11 @@ const FRAMEWORK_LABELS: Record<KnownFramework, string> = {
   capacitor: "Capacitor",
 };
 
-// Guides live in the PUBLIC repo: `client-capacitor/` and the root README both
-// sync there, and an internal-repo link 404s for everyone outside the org.
+// Each framework's native setup page on the public docs site. The pages are
+// framework-specific, so they need no `?sdk=` switcher parameter.
 const CONNECT_GUIDE_URLS: Record<KnownFramework, string> = {
-  "react-native": `${SOURCE_REPO_URL}#part-4--connect-your-react-native-app`,
-  capacitor: `${SOURCE_REPO_URL}/tree/main/client-capacitor#configuration`,
+  "react-native": `${PATCH_DOCS_SITE_URL}/setup/native-setup`,
+  capacitor: `${PATCH_DOCS_SITE_URL}/setup/native-setup-capacitor`,
 };
 
 /** Key names an SDK is configured with, as its own docs spell them. */
