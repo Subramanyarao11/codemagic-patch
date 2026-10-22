@@ -54,6 +54,7 @@
       "types": "./testing.ts",
       "default": "./dist/testing.js"
     },
+    "./jest-setup": "./jest-setup.js",
     "./app.plugin.js": "./app.plugin.js",
     "./package.json": "./package.json"
   },
@@ -73,6 +74,7 @@
     "libs",
     "plugin",
     "react-native.config.js",
+    "jest-setup.js",
     "testing.ts",
     "src",
     "!**/.cxx",

@@ -276,6 +276,27 @@ import {
 
 `restartApp`, `allowRestart` / `disallowRestart`, and `hydrate` are also exported for controlling reload timing, `getRunningBundleUpdateMetadata()` reports the running OTA release (`{ label, packageHash, releaseNotes }`, or `null` on the embedded bundle), and `isNextVersionReady()` reports whether a newer package is installed and waiting for the next reload. See the [type definitions](https://github.com/codemagic-ci-cd/codemagic-patch/tree/main/client/src/types.ts) for the full API surface.
 
+## Testing
+
+The SDK resolves its TurboModule at module scope, which is deliberate: a missing native module fails loudly at app boot rather than degrading into runtime errors at the first call. Under Jest there is no native binary, so that same throw stops a suite before any test runs.
+
+Register the bundled setup file to install a stub for `NativeCodemagicPatch`, leaving every other TurboModule untouched:
+
+```js
+// jest.config.js
+module.exports = {
+  preset: '@react-native/jest-preset',
+  setupFiles: ['@codemagic/react-native-patch/jest-setup'],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@codemagic)/)',
+  ],
+};
+```
+
+The `transformIgnorePatterns` entry is needed because this package resolves to TypeScript source under the `react-native` export condition, as React Native itself does, and Jest does not transform `node_modules` by default.
+
+The stub exists for loadability, not behaviour. Override individual methods with `jest.spyOn` where a test needs a specific native response.
+
 ## Documentation
 
 Full integration guide, update protocol, and self-hosting instructions live in the [Codemagic Patch repository](https://github.com/codemagic-ci-cd/codemagic-patch).
