@@ -18,6 +18,30 @@ A fingerprint is a hash of the native code in your project. Patch computes it at
 
 It is a compatibility signal. Matching fingerprints should mean compatible native code but are not a 100% guarantee.
 
+## What goes into it
+
+The hash covers the native side of your project, not your JavaScript. For a bare React Native project the inputs include:
+
+- The `ios` and `android` directories.
+- Your `.gitignore`, which is both an input and the filter applied to those directories.
+- Autolinked native dependencies, resolved from `node_modules`.
+- The `react-native` package version, and the `scripts` block of `package.json`.
+
+Two consequences are worth knowing before wiring a release into CI.
+
+**Committed lockfiles count; installed output does not.** `ios/Podfile.lock` is tracked, so it is part of the hash. `ios/Pods/` is excluded by the default `**/Pods/` rule, so running `pod install` does not move the fingerprint. Commit `Podfile.lock` and have CI install from it. If CI regenerates the lockfile instead, the fingerprint changes and the next release is blocked as a disagreement.
+
+**Editing `.gitignore` changes the fingerprint**, even when no native code changed, because it determines what gets hashed.
+
+Measured on a bare React Native project, changing one thing at a time:
+
+```text
+baseline                      1c7f0558ebe8a7ad903b5de34b2faf49b10dab3b
+ios/Podfile.lock removed      14f7cb0ffcd3a39fbfa86d400aa319c7d2348656   changed
+ios/Pods/ present             1c7f0558ebe8a7ad903b5de34b2faf49b10dab3b   unchanged
+.gitignore edited             4294e38190675e35a1a56bf77d864fd5413a4fef   changed
+```
+
 ## How it helps
 
 ### Disagreements
