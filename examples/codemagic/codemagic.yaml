@@ -17,7 +17,7 @@
 #   first failing script, so lint and test failures mean nothing is published.
 # - `--non-interactive` keeps the build from hanging on a confirm prompt.
 # - Publishing an OTA update bundles JavaScript and uploads it; it never opens
-#   Xcode, so `instance_type: linux` works and costs less. Note that the free
+#   Xcode, so `instance_type: linux_x2` works and costs less. Note that the free
 #   tier is macOS-only, so Linux instances need a paid plan.
 # - For a monorepo, add `--project-root <path>` to the release commands.
 # - To publish only from tags, swap the `branch_patterns` block for
